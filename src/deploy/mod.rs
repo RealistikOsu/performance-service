@@ -517,8 +517,8 @@ async fn recalculate_user(
     if user_privileges & 1 > 0 && inactive_days < 60 {
         let redis_leaderboard = match rx {
             0 => "leaderboard".to_string(),
-            1 => "relaxboard".to_string(),
-            2 => "autoboard".to_string(),
+            1 => "leaderboard_relax".to_string(),
+            2 => "leaderboard_ap".to_string(),
             _ => unreachable!(),
         };
 
