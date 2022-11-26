@@ -240,7 +240,7 @@ async fn recalculate_mode_scores(
         &format!(
             "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, s.300_count, 
             s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed, 
-            s.accuracy, s.pp, s.checksum, s.patcher, s.pinned, b.beatmap_id, b.beatmapset_id 
+            s.accuracy, s.pp, b.beatmap_id, b.beatmapset_id 
             FROM {} s 
             INNER JOIN 
                 beatmaps b 
@@ -421,7 +421,7 @@ async fn recalculate_user(
         &format!(
             "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, s.300_count, 
             s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed, 
-            s.accuracy, s.pp, s.checksum, s.patcher, s.pinned, b.beatmap_id, b.beatmapset_id 
+            s.accuracy, s.pp, b.beatmap_id, b.beatmapset_id 
             FROM {} s 
             INNER JOIN 
                 beatmaps b 

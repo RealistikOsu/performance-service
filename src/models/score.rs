@@ -176,14 +176,11 @@ pub struct RippleScore {
     #[sqlx(rename = "misses_count")]
     pub count_misses: i32,
 
-    pub time: i64,
+    pub time: String,
     pub play_mode: i32,
     pub completed: i32,
     pub accuracy: f32,
     pub pp: f32,
-    pub checksum: Option<String>,
-    pub patcher: bool,
-    pub pinned: bool,
 
     pub beatmap_id: i32,
     pub beatmapset_id: i32,
