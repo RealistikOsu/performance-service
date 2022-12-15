@@ -30,7 +30,7 @@ async fn get_rework_user(
     Path(user_id): Path<i32>,
 ) -> Json<Option<ReworkUser>> {
     let stats: Option<(String, String)> = sqlx::query_as(
-        "SELECT users.username, country FROM users INNER JOIN users_stats USING(id) WHERE id = ?",
+        "SELECT users.username, users.country FROM users INNER JOIN users_stats USING(id) WHERE id = ?",
     )
     .bind(user_id)
     .fetch_optional(&ctx.database)
