@@ -7,6 +7,7 @@ use lapin::{
 use redis::AsyncCommands;
 use rkyv::Deserialize;
 use tokio_stream::StreamExt;
+use vanilla_rework::BeatmapExt;
 
 use crate::{
     context::Context,

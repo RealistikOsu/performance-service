@@ -1,7 +1,6 @@
 use crate::context::Context;
 use akatsuki_pp_rs::{Beatmap, BeatmapExt, GameMode, PerformanceAttributes};
 use axum::{extract::Extension, routing::post, Json, Router};
-use rkyv::result;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
