@@ -45,7 +45,7 @@ impl ReworkScore {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow, Clone)]
 pub struct APIBaseReworkScore {
     pub score_id: i64,
     pub beatmap_id: i32,
@@ -64,12 +64,10 @@ pub struct APIBaseReworkScore {
     pub num_misses: i32,
     pub old_pp: f32,
     pub new_pp: f32,
-    pub old_rank: u64,
-    pub new_rank: u64,
 }
 
 impl APIBaseReworkScore {
-    pub fn from_score(score: ReworkScore, old_rank: u64, new_rank: u64) -> Self {
+    pub fn from_score(score: ReworkScore) -> Self {
         Self {
             score_id: score.score_id,
             beatmap_id: score.beatmap_id,
@@ -88,8 +86,6 @@ impl APIBaseReworkScore {
             num_misses: score.num_misses,
             old_pp: score.old_pp,
             new_pp: score.new_pp,
-            old_rank,
-            new_rank,
         }
     }
 }
@@ -118,7 +114,12 @@ pub struct APIReworkScore {
 }
 
 impl APIReworkScore {
-    pub fn from_base(base: APIBaseReworkScore, beatmap: Beatmap) -> Self {
+    pub fn from_base(
+        base: APIBaseReworkScore,
+        beatmap: Beatmap,
+        old_rank: u64,
+        new_rank: u64,
+    ) -> Self {
         Self {
             score_id: base.score_id,
             user_id: base.user_id,
@@ -135,8 +136,8 @@ impl APIReworkScore {
             num_misses: base.num_misses,
             old_pp: base.old_pp,
             new_pp: base.new_pp,
-            old_rank: base.old_rank,
-            new_rank: base.new_rank,
+            old_rank,
+            new_rank,
             beatmap,
         }
     }

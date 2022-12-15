@@ -1,6 +1,8 @@
 use crate::{
-    context::Context, models::leaderboard::Leaderboard, models::rework::Rework,
+    context::Context,
+    models::leaderboard::Leaderboard,
     models::stats::APIReworkStats,
+    models::{rework::Rework, stats::APIBaseReworkStats},
 };
 use std::sync::Arc;
 
@@ -35,9 +37,8 @@ impl LeaderboardsRepository {
                 .await
                 .unwrap();
 
-        let rework_users: Vec<APIReworkStats> = sqlx::query_as(
+        let rework_users: Vec<APIBaseReworkStats> = sqlx::query_as(
             "SELECT user_id, users_stats.country, users.username user_name, rework_id, old_pp, new_pp, 
-            DENSE_RANK() OVER (ORDER BY old_pp DESC) old_rank, DENSE_RANK() OVER (ORDER BY new_pp DESC) new_rank 
             FROM 
                 rework_stats 
             INNER JOIN 
@@ -59,9 +60,31 @@ impl LeaderboardsRepository {
             .await
             .unwrap();
 
+        let mut rework_stats = Vec::new();
+        for rework_user in &rework_users {
+            let mut temp_users = rework_users.clone();
+
+            temp_users.sort_by(|a, b| a.old_pp.partial_cmp(&b.old_pp).unwrap());
+            let old_rank = (temp_users
+                .iter()
+                .position(|a| a.user_id == rework_user.user_id)
+                .unwrap()
+                + 1) as u64;
+
+            temp_users.sort_by(|a, b| a.new_pp.partial_cmp(&b.new_pp).unwrap());
+            let new_rank = (temp_users
+                .iter()
+                .position(|a| a.user_id == rework_user.user_id)
+                .unwrap()
+                + 1) as u64;
+
+            let rework_user = APIReworkStats::from_base(rework_user.clone(), new_rank, old_rank);
+            rework_stats.push(rework_user);
+        }
+
         let leaderboard = Leaderboard {
             total_count: leaderboard_count,
-            users: rework_users,
+            users: rework_stats,
         };
 
         Ok(Some(leaderboard))
