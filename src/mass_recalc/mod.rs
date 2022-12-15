@@ -29,7 +29,8 @@ async fn queue_user(user_id: i32, rework: &Rework, context: &Context) {
     .bind(rework.mode)
     .fetch_optional(&context.database)
     .await
-    .unwrap_or(None);
+    .unwrap_or(None)
+    .and_then(|t: String| Some(t.parse::<i32>().unwrap()));
 
     let inactive_days = match last_score_time {
         Some(time) => {
