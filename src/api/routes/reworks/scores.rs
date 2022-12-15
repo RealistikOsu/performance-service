@@ -1,4 +1,4 @@
-use std::{ops::Index, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     extract::{Extension, Path},
