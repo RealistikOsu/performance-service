@@ -127,8 +127,7 @@ async fn handle_queue_request(
                 AND completed = 3 
                 AND play_mode = ? 
                 AND ranked IN (3, 2) 
-            ORDER BY pp DESC 
-            LIMIT 100",
+            ORDER BY pp DESC",
             scores_table
         )
     )
