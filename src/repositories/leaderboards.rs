@@ -65,18 +65,22 @@ impl LeaderboardsRepository {
             let mut temp_users = rework_users.clone();
 
             temp_users.sort_by(|a, b| a.old_pp.partial_cmp(&b.old_pp).unwrap());
+            temp_users.reverse();
             let old_rank = (temp_users
                 .iter()
                 .position(|a| a.user_id == rework_user.user_id)
                 .unwrap()
-                + 1) as u64;
+                + 1) as u64
+                + offset as u64;
 
             temp_users.sort_by(|a, b| a.new_pp.partial_cmp(&b.new_pp).unwrap());
+            temp_users.reverse();
             let new_rank = (temp_users
                 .iter()
                 .position(|a| a.user_id == rework_user.user_id)
                 .unwrap()
-                + 1) as u64;
+                + 1) as u64
+                + offset as u64;
 
             let rework_user = APIReworkStats::from_base(rework_user.clone(), new_rank, old_rank);
             rework_stats.push(rework_user);
