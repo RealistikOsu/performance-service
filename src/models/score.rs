@@ -1,6 +1,6 @@
 use super::beatmap::Beatmap;
 
-#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow, Clone)]
 pub struct ReworkScore {
     pub score_id: i64,
     pub beatmap_id: i32,

@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
 use lapin::{
     options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
@@ -113,7 +113,7 @@ async fn handle_queue_request(
         _ => unreachable!(),
     };
 
-    let scores: Vec<RippleScore> = sqlx::query_as(
+    let mut scores: Vec<RippleScore> = sqlx::query_as(
         &format!(
             "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, s.300_count, 
             s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed, 
@@ -124,7 +124,7 @@ async fn handle_queue_request(
                 USING(beatmap_md5) 
             WHERE 
                 userid = ? 
-                AND completed = 3 
+                AND completed IN (2, 3) 
                 AND play_mode = ? 
                 AND ranked IN (3, 2) 
             ORDER BY pp DESC",
@@ -147,7 +147,35 @@ async fn handle_queue_request(
         .fetch_one(&context.database)
         .await?;
 
-    let rework_scores = process_scores(&rework, scores, &context).await?;
+    let mut rework_scores = process_scores(&rework, scores, &context).await?;
+
+    let mut beatmap_scores: HashMap<i32, ReworkScore> = HashMap::new();
+    for score in rework_scores.clone() {
+        if beatmap_scores.contains_key(&score.beatmap_id) {
+            let other_score = beatmap_scores.get(&score.beatmap_id).unwrap();
+
+            if other_score.new_pp > score.new_pp {
+                rework_scores.remove(
+                    rework_scores
+                        .iter()
+                        .position(|s| s.score_id == score.score_id)
+                        .unwrap(),
+                );
+                beatmap_scores.insert(score.beatmap_id.clone(), other_score.clone());
+            } else {
+                rework_scores.remove(
+                    rework_scores
+                        .iter()
+                        .position(|s| s.score_id == other_score.score_id)
+                        .unwrap(),
+                );
+                beatmap_scores.insert(score.beatmap_id.clone(), score);
+            }
+        } else {
+            beatmap_scores.insert(score.beatmap_id.clone(), score);
+        }
+    }
+
     let new_pp = calculate_new_pp(&rework_scores, score_count);
 
     for rework_score in rework_scores {
