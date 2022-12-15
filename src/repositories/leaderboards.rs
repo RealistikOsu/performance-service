@@ -38,7 +38,7 @@ impl LeaderboardsRepository {
                 .unwrap();
 
         let rework_users: Vec<APIBaseReworkStats> = sqlx::query_as(
-            "SELECT user_id, users_stats.country, users.username user_name, rework_id, old_pp, new_pp, 
+            "SELECT user_id, users_stats.country, users.username user_name, rework_id, old_pp, new_pp 
             FROM 
                 rework_stats 
             INNER JOIN 
