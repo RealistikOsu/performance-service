@@ -56,6 +56,7 @@ async fn get_rework_scores(
         let mut temp_scores = base_scores.clone();
 
         temp_scores.sort_by(|a, b| a.old_pp.partial_cmp(&b.old_pp).unwrap());
+        temp_scores.reverse();
         let old_rank = (temp_scores
             .iter()
             .position(|a| a.score_id == base_score.score_id)
@@ -63,6 +64,7 @@ async fn get_rework_scores(
             + 1) as u64;
 
         temp_scores.sort_by(|a, b| a.new_pp.partial_cmp(&b.new_pp).unwrap());
+        temp_scores.reverse();
         let new_rank = (temp_scores
             .iter()
             .position(|a| a.score_id == base_score.score_id)
