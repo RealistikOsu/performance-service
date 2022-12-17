@@ -36,7 +36,7 @@ futures = "0.3.17"
 strsim = "0.10.0"
 akatsuki-pp-rs = { package = "rosu-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "1e2224b4cac6e3115c1de70287a63fb4659f10ec", features = ["async_tokio"] }
 reqwest = "0.11"
-vanilla-rework = { package = "rosu-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "769364bcbdc979512597032f0d01ac72e00b7ae2", features = ["async_tokio"] }
+vanilla-rework = { package = "rosu-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "b3c75d8c4a59e233cc00afba2c31fe42a6dcfbd2", features = ["async_tokio"] }
 
 [profile.release]
 lto = "fat"
