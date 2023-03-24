@@ -34,7 +34,7 @@ bcrypt = "0.13.0"
 uuid = { version = "1.2.1", features = ["v4"] }
 futures = "0.3.17"
 strsim = "0.10.0"
-akatsuki-pp-rs = { package = "rosu-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "1e2224b4cac6e3115c1de70287a63fb4659f10ec", features = ["async_tokio"] }
+akatsuki-pp-rs = { package = "rosu-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "d203afdd674cee112ba75d2234920022d70b022c", features = ["async_tokio"] }
 reqwest = "0.11"
 vanilla-rework = { package = "rosu-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "b3c75d8c4a59e233cc00afba2c31fe42a6dcfbd2", features = ["async_tokio"] }
 
