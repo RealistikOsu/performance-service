@@ -625,17 +625,17 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
 
         if rx || ap {
             for rx in &relax_bits {
-                recalculate_mode_scores(
-                    mode,
-                    rx.clone(),
-                    context_arc.clone(),
-                    recalculate_context.clone(),
-                )
-                .await?;
+                //recalculate_mode_scores(
+                //    mode,
+                //    rx.clone(),
+                //    context_arc.clone(),
+                //    recalculate_context.clone(),
+                //)
+                //.await?;
             }
         } else {
-            recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
-                .await?;
+            //recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
+                //.await?;
         }
     }
 
