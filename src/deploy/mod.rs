@@ -497,24 +497,10 @@ async fn recalculate_user(
     .await
     .unwrap_or(None);
 
-    let inactive_days = match last_score_time {
-        Some(time) => {
-            ((SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i32)
-                - time)
-                / 60
-                / 60
-                / 24
-        }
-        None => 60,
-    };
-
     let mut redis_connection = ctx.redis.get_async_connection().await?;
 
     // unrestricted, and set a score in the past 2 months
-    if user_privileges & 1 > 0 && inactive_days < 60 {
+    if user_privileges & 1 > 0 {
         let redis_leaderboard = match rx {
             0 => "leaderboard".to_string(),
             1 => "leaderboard_relax".to_string(),
@@ -625,17 +611,17 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
 
         if rx || ap {
             for rx in &relax_bits {
-                //recalculate_mode_scores(
-                //    mode,
-                //    rx.clone(),
-                //    context_arc.clone(),
-                //    recalculate_context.clone(),
-                //)
-                //.await?;
+                recalculate_mode_scores(
+                    mode,
+                    rx.clone(),
+                    context_arc.clone(),
+                    recalculate_context.clone(),
+                )
+                .await?;
             }
         } else {
-            //recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
-                //.await?;
+            recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
+                .await?;
         }
     }
 
