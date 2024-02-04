@@ -485,18 +485,6 @@ async fn recalculate_user(
     .fetch_one(&ctx.database)
     .await?;
 
-    let last_score_time: Option<i32> = sqlx::query_scalar(&format!(
-        "SELECT max(time) FROM {} INNER JOIN beatmaps USING(beatmap_md5) 
-            WHERE userid = ? AND completed = 3 AND ranked IN (2, 3) AND play_mode = ? 
-            ORDER BY pp DESC LIMIT 100",
-        scores_table
-    ))
-    .bind(user_id)
-    .bind(mode)
-    .fetch_optional(&ctx.database)
-    .await
-    .unwrap_or(None);
-
     let mut redis_connection = ctx.redis.get_async_connection().await?;
 
     // unrestricted, and set a score in the past 2 months
