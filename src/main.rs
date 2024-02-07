@@ -27,10 +27,10 @@ async fn main() -> anyhow::Result<()> {
 
     let amq_url = format!(
         "amqp://{}:{}@{}:{}",
-        config.ampq_user,
-        config.ampq_password,
-        config.ampq_host,
-        config.ampq_port,
+        config.amqp_user,
+        config.amqp_password,
+        config.amqp_host,
+        config.amqp_port,
     );
 
     let amqp_manager = Manager::new(amq_url, ConnectionProperties::default());
