@@ -633,6 +633,7 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
 
 pub async fn recalc_single(context: Context) -> anyhow::Result<()> {
     print!("Enter the user ID of the user to recalculate.");
+    std::io::stdout().flush().unwrap();
 
     let mut user_id_string = String::new();
     std::io::stdin().read_line(&mut user_id_string)?;
