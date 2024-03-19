@@ -60,6 +60,7 @@ async fn main() -> anyhow::Result<()> {
         "processor" => processor::serve(context).await?,
         "mass_recalc" => mass_recalc::serve(context).await?,
         "deploy" => deploy::serve(context).await?,
+        "recalc" => deploy::recalc_single(context).await?,
         _ => panic!("unknown app component"),
     }
 

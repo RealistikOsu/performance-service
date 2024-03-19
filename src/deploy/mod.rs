@@ -630,3 +630,31 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub async fn recalc_single(context: Context) -> anyhow::Result<()> {
+    print!("Enter the user ID of the user to recalculate.");
+
+    let mut user_id_string = String::new();
+    std::io::stdin().read_line(&mut user_id_string)?;
+
+    print!("\n");
+    std::io::stdout().flush().unwrap();
+
+    let user_id: i32 = user_id_string.parse()?;
+
+    let ctx = Arc::new(context);
+
+
+    for rx in 0..3 {
+        for mode in 0..4 {
+            recalculate_user(
+                user_id,
+                mode,
+                rx,
+                ctx.clone(),
+            ).await?;
+        }
+    }
+
+    Ok(())
+}

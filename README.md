@@ -39,6 +39,7 @@ The performance service features multiple componenets to cover most usecases. Th
 | `deploy` | A console interface for recalculating the whole server with the current PP system. Handles stats and score overwrite. |
 | `mass_recalc` | **Internal** undocumented rework testing tool. |
 | `processor` | **Internal** undocumented rework testing tool. |
+| `recalc` | Recalculates a single user. |
 
 #### Configuration
 There are other flags available for advanced users and configuration. **These may also be set through creating a copy of the `.env.example` file and naming it `.env`.**
