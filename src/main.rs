@@ -12,15 +12,41 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Config::parse();
 
+    let mysql_url = format!(
+        "mysql://{}:{}@{}:{}/{}",
+        config.mysql_user,
+        config.mysql_password,
+        config.mysql_host,
+        config.mysql_port,
+        config.mysql_database,
+    );
+
     let database = MySqlPoolOptions::new()
-        .connect(&config.database_url)
+        .connect(&mysql_url)
         .await?;
 
-    let amqp_manager = Manager::new(config.amqp_url.clone(), ConnectionProperties::default());
+    let amq_url = format!(
+        "amqp://{}:{}@{}:{}",
+        config.amqp_user,
+        config.amqp_password,
+        config.amqp_host,
+        config.amqp_port,
+    );
+
+    let amqp_manager = Manager::new(amq_url, ConnectionProperties::default());
     let amqp = Pool::builder(amqp_manager).max_size(10).build()?;
     let amqp_channel = amqp.get().await?.create_channel().await?;
 
-    let redis = Client::open(config.redis_url.clone())?;
+    let redis_url = format!(
+        "redis://{}:{}@{}:{}/{}",
+        config.redis_user,
+        config.redis_password,
+        config.redis_host,
+        config.redis_port,
+        config.redis_db,
+    );
+
+    let redis = Client::open(redis_url)?;
 
     let context = Context {
         config,

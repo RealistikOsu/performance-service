@@ -46,8 +46,19 @@ There are other flags available for advanced users and configuration. **These ma
 | Flag | Purpose |
 | ---| --- |
 | `api_port` | The port at which the `api` component should run. Has no impact elsewhere. |
-| `database_url` | The JDBC compliant URL to the database, featuring your credentials. |
-| `amqp_url` | Same as `database_url`, but for RabbitMQ. |
-| `redis_url` | Same as `database_url`, but for Redis. |
+| `mysql_user` | A MySQL user with read-write access to scores and users. |
+| `mysql_password` | The password for the MySQL user. |
+| `mysql_host` | The host of the MySQL server. |
+| `mysql_port` | The port of the MySQL server. |
+| `mysql_database` | The RealistikOsu database. |
+| `amqp_user` | A RabbitMQ user. |
+| `amqp_password` | The password for the RabbitMQ user. |
+| `amqp_host` | The host of the RabbitMQ server. |
+| `amqp_port` | The port of the RabbitMQ server. |
+| `redis_user` | The Redis user with access to global readerboards (leave empty if no authentification is required). |
+| `redis_password` | The password for the Redis user. |
+| `redis_host` | The host of the Redis server used for global leaderboards. |
+| `redis_port` | The port of the Redis server. |
+| `redis_db` | The index of the Redis database. |
 | `beatmaps_path` | The location at which `.osu` files for beatmaps should be stored. For optimum performance, use the same directory that your score server uses. |
 
