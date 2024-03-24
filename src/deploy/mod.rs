@@ -302,7 +302,7 @@ fn calculate_new_pp(scores: &Vec<RippleScore>, score_count: i32) -> i32 {
     }
 
     // bonus pp
-    total_pp += 416.6667 * (1.0 - 0.9994_f32.powi(score_count as i32));
+    total_pp += 416.6667 * (1.0 - 0.995_f32.powi(score_count.min(1000)));
 
     total_pp.round() as i32
 }
