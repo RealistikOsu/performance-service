@@ -7,7 +7,7 @@ use lapin::{
 use redis::AsyncCommands;
 use rkyv::Deserialize;
 use tokio_stream::StreamExt;
-use vanilla_rework::BeatmapExt;
+use latest_rework::BeatmapExt;
 
 use crate::{
     context::Context,
@@ -61,13 +61,6 @@ async fn calculate_latest_rework_relax(score: &RippleScore, beatmap_path: &Path)
     };
 
     let result = latest_rework::osu_2019::OsuPP::new(&beatmap)
-        .mode(match score.play_mode {
-            0 => latest_rework::GameMode::Osu,
-            1 => latest_rework::GameMode::Taiko,
-            2 => latest_rework::GameMode::Catch,
-            3 => latest_rework::GameMode::Mania,
-            _ => return Ok(0.0),
-        })
         .mods(score.mods as u32)
         .combo(score.max_combo as usize)
         .accuracy(score.accuracy as f64)
