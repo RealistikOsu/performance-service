@@ -33,6 +33,13 @@ async fn calculate_latest_rework(score: &RippleScore, beatmap_path: &Path) -> an
 
     let result = beatmap
         .pp()
+        .mode(match score.play_mode {
+            0 => latest_rework::GameMode::Osu,
+            1 => latest_rework::GameMode::Taiko,
+            2 => latest_rework::GameMode::Catch,
+            3 => latest_rework::GameMode::Mania,
+            _ => return Ok(0.0),
+        })
         .mods(score.mods as u32)
         .combo(score.max_combo as usize)
         .accuracy(score.accuracy as f64)
