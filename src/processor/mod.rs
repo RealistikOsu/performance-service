@@ -25,8 +25,8 @@ fn round(x: f32, decimals: u32) -> f32 {
     (x * y).round() / y
 }
 
-async fn calculate_vanilla_rework(score: &RippleScore, beatmap_path: &Path) -> anyhow::Result<f32> {
-    let beatmap = match vanilla_rework::Beatmap::from_path(beatmap_path).await {
+async fn calculate_latest_rework(score: &RippleScore, beatmap_path: &Path) -> anyhow::Result<f32> {
+    let beatmap = match latest_rework::Beatmap::from_path(beatmap_path).await {
         Ok(beatmap) => beatmap,
         Err(_) => return Ok(0.0),
     };
@@ -34,16 +34,44 @@ async fn calculate_vanilla_rework(score: &RippleScore, beatmap_path: &Path) -> a
     let result = beatmap
         .pp()
         .mode(match score.play_mode {
-            0 => vanilla_rework::GameMode::Osu,
-            1 => vanilla_rework::GameMode::Taiko,
-            2 => vanilla_rework::GameMode::Catch,
-            3 => vanilla_rework::GameMode::Mania,
+            0 => latest_rework::GameMode::Osu,
+            1 => latest_rework::GameMode::Taiko,
+            2 => latest_rework::GameMode::Catch,
+            3 => latest_rework::GameMode::Mania,
             _ => return Ok(0.0),
         })
         .mods(score.mods as u32)
         .combo(score.max_combo as usize)
         .accuracy(score.accuracy as f64)
         .n_misses(score.count_misses as usize)
+        .calculate();
+
+    let pp = round(result.pp() as f32, 2);
+    if pp.is_infinite() || pp.is_nan() {
+        return Ok(0.0);
+    }
+
+    Ok(pp)
+}
+
+async fn calculate_latest_rework_relax(score: &RippleScore, beatmap_path: &Path) -> anyhow::Result<f32> {
+    let beatmap = match latest_rework::Beatmap::from_path(beatmap_path).await {
+        Ok(beatmap) => beatmap,
+        Err(_) => return Ok(0.0),
+    };
+
+    let result = latest_rework::osu_2019::OsuPP::new(&beatmap)
+        .mode(match score.play_mode {
+            0 => latest_rework::GameMode::Osu,
+            1 => latest_rework::GameMode::Taiko,
+            2 => latest_rework::GameMode::Catch,
+            3 => latest_rework::GameMode::Mania,
+            _ => return Ok(0.0),
+        })
+        .mods(score.mods as u32)
+        .combo(score.max_combo as usize)
+        .accuracy(score.accuracy as f64)
+        .misses(score.count_misses as usize)
         .calculate();
 
     let pp = round(result.pp() as f32, 2);
@@ -63,8 +91,17 @@ async fn process_scores(
 
     for score in &scores {
         let new_pp = match rework.rework_id {
-            1 => {
-                calculate_vanilla_rework(
+            2 => {
+                calculate_latest_rework_relax(
+                    score,
+                    Path::new(&context.config.beatmaps_path)
+                        .join(format!("{}.osu", score.beatmap_id))
+                        .as_ref(),
+                )
+                .await?
+            },
+            3 => {
+                calculate_latest_rework(
                     score,
                     Path::new(&context.config.beatmaps_path)
                         .join(format!("{}.osu", score.beatmap_id))
@@ -92,7 +129,7 @@ fn calculate_new_pp(scores: &Vec<ReworkScore>, score_count: i32) -> i32 {
     }
 
     // bonus pp
-    total_pp += 416.6667 * (1.0 - 0.995_f32.powi(score_count.min(1000)));
+    total_pp += 416.6667 * (1.0 - 0.995_f32.powi(score_count));
 
     total_pp.round() as i32
 }
@@ -138,7 +175,7 @@ async fn handle_queue_request(
 
     let score_count: i32 = sqlx::query_scalar(
         &format!(
-            "SELECT COUNT(s.id) FROM {} s INNER JOIN beatmaps USING(beatmap_md5) WHERE userid = ? AND completed = 3 AND play_mode = ? AND ranked IN (3, 2) LIMIT 25397",
+            "SELECT COUNT(s.id) FROM {} s INNER JOIN beatmaps USING(beatmap_md5) WHERE userid = ? AND completed = 3 AND play_mode = ? AND ranked IN (3, 2) LIMIT 1000",
             scores_table
         )
     )
