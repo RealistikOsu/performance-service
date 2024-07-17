@@ -1,19 +1,18 @@
-FROM rust:latest as build
+FROM ubuntu:24.04
 
-RUN USER=root cargo new --bin performance-service
-WORKDIR /performance-service
+RUN apt-get update && apt-get install -y \
+ build-essential \
+ curl \
+ pkg-config \
+ libssl-dev
 
-COPY ./Cargo.toml ./Cargo.toml
-COPY ./build.rs ./build.rs
+RUN curl https://sh.rustup.rs | bash -s -- -y
 
-RUN cargo build --release
+WORKDIR /src
 
-COPY ./src ./src
+COPY . /src
 
-#RUN rm ./target/release/deps/performance-service*
-RUN cargo build --release
+RUN export PATH="$HOME/.cargo/bin:$PATH" && \
+ cargo build --release
 
-FROM debian:buster-slim
-
-COPY --from=build /performance-service/target/release/performance-service .
-CMD ["./performance-service"]
+CMD ["./target/release/performance-service"]

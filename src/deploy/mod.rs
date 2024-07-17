@@ -6,7 +6,6 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     sync::Arc,
-    time::SystemTime,
 };
 
 use std::io::Write;
