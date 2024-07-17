@@ -63,11 +63,11 @@ async fn calculate_latest_rework_relax(score: &RippleScore, beatmap_path: &Path)
     let result = latest_rework::osu_2019::OsuPP::new(&beatmap)
         .mods(score.mods as u32)
         .combo(score.max_combo as usize)
-        .accuracy(score.accuracy as f64)
+        .accuracy(score.accuracy)
         .misses(score.count_misses as usize)
         .calculate();
 
-    let pp = round(result.pp() as f32, 2);
+    let pp = round(result.pp as f32, 2);
     if pp.is_infinite() || pp.is_nan() {
         return Ok(0.0);
     }

@@ -1,13 +1,31 @@
 use crate::context::Context;
 use akatsuki_pp_rs::{Beatmap, BeatmapExt, GameMode, PerformanceAttributes};
-use axum::{extract::Extension, routing::post, Json, Router};
+use axum::{extract::Extension, routing::{get, post}, Json, Router};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs::File;
 
 pub fn router() -> Router {
-    Router::new().route("/api/v1/calculate", post(calculate_play))
+    Router::new()
+        .route("/api/v1/status", get(status))
+        .route("/api/v1/calculate", post(calculate_play))
+}
+
+#[derive(serde::Serialize)]
+struct ServiceStatus {
+    status: i32,
+    online: bool
+}
+
+// TODO: move this somewhere else.
+async fn status() -> Json<ServiceStatus> {
+    let res = ServiceStatus {
+        status: 200,
+        online: true
+    };
+
+    Json(res)
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

@@ -1,6 +1,5 @@
 use std::io::Write;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use crate::{
     context::Context,
