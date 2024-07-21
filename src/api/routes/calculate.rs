@@ -36,6 +36,7 @@ pub struct CalculateRequest {
     pub max_combo: i32,
     pub accuracy: f32,
     pub miss_count: i32,
+    pub passed_objects: Option<i32>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -69,12 +70,18 @@ async fn calculate_relax_pp(
         }
     };
 
-    let result = akatsuki_pp_rs::osu_2019::OsuPP::new(&beatmap)
+    let builder = akatsuki_pp_rs::osu_2019::OsuPP::new(&beatmap)
         .mods(request.mods as u32)
         .combo(request.max_combo as usize)
         .misses(request.miss_count as usize)
-        .accuracy(request.accuracy)
-        .calculate();
+        .accuracy(request.accuracy);
+
+    if let Some(passed_objects) = request.passed_objects {
+        builder.passed_objects(passed_objects as usize);
+    }
+
+    let result = builder.calculate();
+        
 
     let mut pp = round(result.pp as f32, 2);
     if pp.is_infinite() || pp.is_nan() {
@@ -109,7 +116,7 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
         }
     };
 
-    let result = beatmap
+    let builder = beatmap
         .pp()
         .mode(match request.mode {
             0 => GameMode::Osu,
@@ -121,8 +128,13 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
         .mods(request.mods as u32)
         .combo(request.max_combo as usize)
         .accuracy(request.accuracy as f64)
-        .n_misses(request.miss_count as usize)
-        .calculate();
+        .n_misses(request.miss_count as usize);
+
+    if let Some(passed_objects) = request.passed_objects {
+        builder.passed_objects(passed_objects as usize);
+    }
+        
+    let result = builder.calculate();
 
     let mut pp = round(result.pp() as f32, 2);
     if pp.is_infinite() || pp.is_nan() {
