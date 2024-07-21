@@ -70,14 +70,14 @@ async fn calculate_relax_pp(
         }
     };
 
-    let builder = akatsuki_pp_rs::osu_2019::OsuPP::new(&beatmap)
+    let mut builder = akatsuki_pp_rs::osu_2019::OsuPP::new(&beatmap)
         .mods(request.mods as u32)
         .combo(request.max_combo as usize)
         .misses(request.miss_count as usize)
         .accuracy(request.accuracy);
 
     if let Some(passed_objects) = request.passed_objects {
-        builder.passed_objects(passed_objects as usize);
+        builder = builder.passed_objects(passed_objects as usize);
     }
 
     let result = builder.calculate();
@@ -116,7 +116,7 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
         }
     };
 
-    let builder = beatmap
+    let mut builder = beatmap
         .pp()
         .mode(match request.mode {
             0 => GameMode::Osu,
@@ -131,7 +131,7 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
         .n_misses(request.miss_count as usize);
 
     if let Some(passed_objects) = request.passed_objects {
-        builder.passed_objects(passed_objects as usize);
+        builder = builder.passed_objects(passed_objects as usize);
     }
         
     let result = builder.calculate();
