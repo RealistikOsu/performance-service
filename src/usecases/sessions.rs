@@ -131,18 +131,6 @@ pub async fn enqueue(
         .await
         .unwrap();
 
-    context
-        .amqp_channel
-        .basic_publish(
-            "",
-            "rework_queue",
-            BasicPublishOptions::default(),
-            &rkyv::to_bytes::<_, 256>(&QueueRequest { user_id, rework_id }).unwrap(),
-            BasicProperties::default(),
-        )
-        .await
-        .unwrap();
-
     Ok(QueueResponse {
         success: true,
         message: None,

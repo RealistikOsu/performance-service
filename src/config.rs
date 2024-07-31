@@ -25,18 +25,6 @@ pub struct Config {
     pub mysql_database: String,
 
     #[clap(long, env)]
-    pub amqp_user: String,
-
-    #[clap(long, env)]
-    pub amqp_password: String,
-
-    #[clap(long, env)]
-    pub amqp_host: String,
-
-    #[clap(long, env)]
-    pub amqp_port: u16,
-
-    #[clap(long, env)]
     pub redis_user: String,
 
     #[clap(long, env)]

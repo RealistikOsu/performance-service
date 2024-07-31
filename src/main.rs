@@ -1,7 +1,7 @@
 use clap::Parser;
 use deadpool_lapin::{Manager, Pool};
 use lapin::ConnectionProperties;
-use performance_service::{api, config::Config, context::Context, deploy, mass_recalc, processor};
+use performance_service::{api, config::Config, context::Context, deploy, mass_recalc};
 use redis::Client;
 use sqlx::mysql::MySqlPoolOptions;
 
@@ -25,18 +25,6 @@ async fn main() -> anyhow::Result<()> {
         .connect(&mysql_url)
         .await?;
 
-    let amq_url = format!(
-        "amqp://{}:{}@{}:{}",
-        config.amqp_user,
-        config.amqp_password,
-        config.amqp_host,
-        config.amqp_port,
-    );
-
-    let amqp_manager = Manager::new(amq_url, ConnectionProperties::default());
-    let amqp = Pool::builder(amqp_manager).max_size(10).build()?;
-    let amqp_channel = amqp.get().await?.create_channel().await?;
-
     let redis_url = format!(
         "redis://{}:{}@{}:{}/{}",
         config.redis_user,
@@ -51,13 +39,11 @@ async fn main() -> anyhow::Result<()> {
     let context = Context {
         config,
         database,
-        amqp_channel,
         redis,
     };
 
     match context.config.app_component.as_str() {
         "api" => api::serve(context).await?,
-        "processor" => processor::serve(context).await?,
         "mass_recalc" => mass_recalc::serve(context).await?,
         "deploy" => deploy::serve(context).await?,
         "recalc" => deploy::recalc_single(context).await?,

@@ -32,22 +32,6 @@ async fn queue_user(user_id: i32, rework: &Rework, context: &Context) {
         .await
         .unwrap();
 
-    context
-        .amqp_channel
-        .basic_publish(
-            "",
-            "rework_queue",
-            BasicPublishOptions::default(),
-            &rkyv::to_bytes::<_, 256>(&QueueRequest {
-                user_id,
-                rework_id: rework.rework_id,
-            })
-            .unwrap(),
-            BasicProperties::default(),
-        )
-        .await
-        .unwrap();
-
     log::info!("Queued user ID {}", user_id);
 }
 

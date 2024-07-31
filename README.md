@@ -10,7 +10,6 @@ It features:
 
 ### Requirements
 - The Rust toolchain installed (mainly `cargo`) for compilation.
-- A RabbitMQ instance (can be created by simply running `docker run -p 5672:5672 rabbitmq`)
 
 ### Compilation
 To compile it, use the following command if you want simply use it for testing. This will reduce compile times.
@@ -52,10 +51,6 @@ There are other flags available for advanced users and configuration. **These ma
 | `mysql_host` | The host of the MySQL server. |
 | `mysql_port` | The port of the MySQL server. |
 | `mysql_database` | The RealistikOsu database. |
-| `amqp_user` | A RabbitMQ user. |
-| `amqp_password` | The password for the RabbitMQ user. |
-| `amqp_host` | The host of the RabbitMQ server. |
-| `amqp_port` | The port of the RabbitMQ server. |
 | `redis_user` | The Redis user with access to global readerboards (leave empty if no authentification is required). |
 | `redis_password` | The password for the Redis user. |
 | `redis_host` | The host of the Redis server used for global leaderboards. |
