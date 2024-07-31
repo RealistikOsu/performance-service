@@ -34,8 +34,3 @@ strsim = "0.10.0"
 akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/osuAkatsuki/akatsuki-pp-rs", rev = "a8b4eaffb2274d2e86ff042b7327286e13b6488d", features = ["async_tokio"] }
 reqwest = "0.11"
 latest-rework = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "4c3db81466311d4aca6581317248a89a3c27ed4c", features = ["async_tokio"] }
-
-[profile.release]
-lto = "fat"
-codegen-units = 1
-panic = "abort"
