@@ -1,6 +1,4 @@
 use clap::Parser;
-use deadpool_lapin::{Manager, Pool};
-use lapin::ConnectionProperties;
 use performance_service::{api, config::Config, context::Context, deploy, mass_recalc};
 use redis::Client;
 use sqlx::mysql::MySqlPoolOptions;

@@ -22,9 +22,6 @@ tower-http = { version = "0.2.0", features = ["trace"] }
 axum = { version = "0.3.4", features = ["tower-log"] }
 chrono = { version = "0.4.22", features = ["serde"] }
 sqlx = { version = "0.6.2", features = ["runtime-tokio-native-tls", "mysql", "chrono"] }
-lapin = "2.1.1"
-deadpool = { version = "0.9.5", features = ["rt_tokio_1"] }
-deadpool-lapin = "0.10.0"
 rkyv = { version = "0.7", features = ["validation"] }
 bytecheck = "0.6.9"
 tokio-executor-trait = "2.1.0"

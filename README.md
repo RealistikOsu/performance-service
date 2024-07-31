@@ -37,7 +37,6 @@ The performance service features multiple componenets to cover most usecases. Th
 | `api` | Runs a web API for performance calculations. Use when running a score server such as [USSR](https://github.com/RealistikOsu/USSR) |
 | `deploy` | A console interface for recalculating the whole server with the current PP system. Handles stats and score overwrite. |
 | `mass_recalc` | **Internal** undocumented rework testing tool. |
-| `processor` | **Internal** undocumented rework testing tool. |
 | `recalc` | Recalculates a single user. |
 
 #### Configuration

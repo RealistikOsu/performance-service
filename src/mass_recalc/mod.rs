@@ -7,7 +7,6 @@ use crate::{
     usecases,
 };
 
-use lapin::{options::BasicPublishOptions, BasicProperties};
 use redis::AsyncCommands;
 
 async fn queue_user(user_id: i32, rework: &Rework, context: &Context) {

@@ -1,9 +1,7 @@
 use crate::context::Context;
-use crate::models::queue::QueueRequest;
 use crate::models::queue::QueueResponse;
 use crate::models::rework::Rework;
 use crate::repositories;
-use lapin::{options::BasicPublishOptions, BasicProperties};
 use redis::AsyncCommands;
 use std::sync::Arc;
 
