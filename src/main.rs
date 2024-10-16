@@ -10,6 +10,12 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Config::parse();
 
+    // Skip database related code if the app component is "api"
+    if config.app_component == "api" {
+        api::serve(config).await?;
+        return Ok(());
+    }
+
     let mysql_url = format!(
         "mysql://{}:{}@{}:{}/{}",
         config.mysql_user,
@@ -19,9 +25,7 @@ async fn main() -> anyhow::Result<()> {
         config.mysql_database,
     );
 
-    let database = MySqlPoolOptions::new()
-        .connect(&mysql_url)
-        .await?;
+    let database = MySqlPoolOptions::new().connect(&mysql_url).await?;
 
     let redis_url = format!(
         "redis://{}:{}@{}:{}/{}",
@@ -41,7 +45,6 @@ async fn main() -> anyhow::Result<()> {
     };
 
     match context.config.app_component.as_str() {
-        "api" => api::serve(context).await?,
         "mass_recalc" => mass_recalc::serve(context).await?,
         "deploy" => deploy::serve(context).await?,
         "recalc" => deploy::recalc_single(context).await?,

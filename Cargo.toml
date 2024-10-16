@@ -33,4 +33,3 @@ futures = "0.3.17"
 strsim = "0.10.0"
 akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/osuAkatsuki/akatsuki-pp-rs", rev = "4c3db81466311d4aca6581317248a89a3c27ed4c", features = ["async_tokio"] }
 reqwest = "0.11"
-latest-rework = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "4c3db81466311d4aca6581317248a89a3c27ed4c", features = ["async_tokio"] }

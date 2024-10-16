@@ -1,6 +1,10 @@
-use crate::context::Context;
+use crate::config::Config;
 use akatsuki_pp_rs::{Beatmap, BeatmapExt, GameMode, PerformanceAttributes};
-use axum::{extract::Extension, routing::{get, post}, Json, Router};
+use axum::{
+    extract::Extension,
+    routing::{get, post},
+    Json, Router,
+};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -15,14 +19,14 @@ pub fn router() -> Router {
 #[derive(serde::Serialize)]
 struct ServiceStatus {
     status: i32,
-    online: bool
+    online: bool,
 }
 
 // TODO: move this somewhere else.
 async fn status() -> Json<ServiceStatus> {
     let res = ServiceStatus {
         status: 200,
-        online: true
+        online: true,
     };
 
     Json(res)
@@ -81,7 +85,6 @@ async fn calculate_relax_pp(
     }
 
     let result = builder.calculate();
-        
 
     let mut pp = round(result.pp as f32, 2);
     if pp.is_infinite() || pp.is_nan() {
@@ -133,7 +136,7 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
     if let Some(passed_objects) = request.passed_objects {
         builder = builder.passed_objects(passed_objects as usize);
     }
-        
+
     let result = builder.calculate();
 
     let mut pp = round(result.pp() as f32, 2);
@@ -194,14 +197,14 @@ async fn download_beatmap(beatmap_path: PathBuf, request: &CalculateRequest) -> 
 }
 
 async fn calculate_play(
-    Extension(ctx): Extension<Arc<Context>>,
+    Extension(config): Extension<Arc<Config>>,
     Json(requests): Json<Vec<CalculateRequest>>,
 ) -> Json<Vec<CalculateResponse>> {
     let mut results = Vec::new();
 
     for request in requests {
         let beatmap_path =
-            Path::new(&ctx.config.beatmaps_path).join(format!("{}.osu", request.beatmap_id));
+            Path::new(&config.beatmaps_path).join(format!("{}.osu", request.beatmap_id));
 
         if !beatmap_path.exists() {
             match download_beatmap(beatmap_path.clone(), &request).await {

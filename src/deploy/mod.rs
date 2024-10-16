@@ -644,15 +644,9 @@ pub async fn recalc_single(context: Context) -> anyhow::Result<()> {
 
     let ctx = Arc::new(context);
 
-
     for rx in 0..3 {
         for mode in 0..4 {
-            recalculate_user(
-                user_id,
-                mode,
-                rx,
-                ctx.clone(),
-            ).await?;
+            recalculate_user(user_id, mode, rx, ctx.clone()).await?;
         }
     }
 
