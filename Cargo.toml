@@ -31,5 +31,5 @@ bcrypt = "0.13.0"
 uuid = { version = "1.2.1", features = ["v4"] }
 futures = "0.3.17"
 strsim = "0.10.0"
-akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "3ff7ef1f8852cc9a766bbe98d26467520bc45856", features = ["async_tokio"] }
+akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "2df81ebfe20f11b4e875e538304fb27d43bacbea", features = ["async_tokio"] }
 reqwest = "0.11"
