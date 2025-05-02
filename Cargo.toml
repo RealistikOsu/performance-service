@@ -1,9 +1,9 @@
 [package]
 name = "performance-service"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "MIT"
-authors = ["tsunyoku <tsunyoku@gmail.com>", "Aochi <aochi@fuquila.net>"]
+authors = ["tsunyoku <tsunyoku@gmail.com>", "Aochi <me@aochi.uk>"]
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -31,5 +31,5 @@ bcrypt = "0.13.0"
 uuid = { version = "1.2.1", features = ["v4"] }
 futures = "0.3.17"
 strsim = "0.10.0"
-akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "c292e9d1ac021537f0864ff676efb15c36161edb", features = ["async_tokio"] }
+akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "5bdd9cdec2e2be1e6052ff099f580007f5495ca6", features = ["async_tokio"] }
 reqwest = "0.11"
