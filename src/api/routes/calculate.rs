@@ -1,5 +1,9 @@
 use crate::config::Config;
-use akatsuki_pp_rs::{Beatmap, BeatmapExt, GameMode, PerformanceAttributes};
+use akatsuki_pp_rs::{
+    Beatmap,
+    any::PerformanceAttributes,
+    model::mode::GameMode
+};
 use axum::{
     extract::Extension,
     routing::{get, post},
@@ -61,7 +65,7 @@ async fn calculate_relax_pp(
     beatmap_path: PathBuf,
     request: &CalculateRequest,
 ) -> CalculateResponse {
-    let beatmap = match Beatmap::from_path(beatmap_path).await {
+    let beatmap = match Beatmap::from_path(beatmap_path) {
         Ok(beatmap) => beatmap,
         Err(_) => {
             return CalculateResponse {
@@ -74,14 +78,14 @@ async fn calculate_relax_pp(
         }
     };
 
-    let mut builder = akatsuki_pp_rs::osu_2019::OsuPP::new(&beatmap)
+    let mut builder = akatsuki_pp_rs::osu_2019::OsuPP::from_map(&beatmap)
         .mods(request.mods as u32)
-        .combo(request.max_combo as usize)
-        .misses(request.miss_count as usize)
+        .combo(request.max_combo as u32)
+        .misses(request.miss_count as u32)
         .accuracy(request.accuracy);
 
     if let Some(passed_objects) = request.passed_objects {
-        builder = builder.passed_objects(passed_objects as usize);
+        builder = builder.passed_objects(passed_objects as u32);
     }
 
     let result = builder.calculate();
@@ -106,7 +110,7 @@ async fn calculate_relax_pp(
 }
 
 async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) -> CalculateResponse {
-    let beatmap = match Beatmap::from_path(beatmap_path).await {
+    let beatmap = match Beatmap::from_path(beatmap_path) {
         Ok(beatmap) => beatmap,
         Err(_) => {
             return CalculateResponse {
@@ -120,21 +124,23 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
     };
 
     let mut builder = beatmap
-        .pp()
-        .mode(match request.mode {
+        .performance()
+        .try_mode(match request.mode {
             0 => GameMode::Osu,
             1 => GameMode::Taiko,
             2 => GameMode::Catch,
             3 => GameMode::Mania,
             _ => unreachable!(),
         })
+        .unwrap()
+        .lazer(false)
         .mods(request.mods as u32)
-        .combo(request.max_combo as usize)
+        .combo(request.max_combo as u32)
         .accuracy(request.accuracy as f64)
-        .n_misses(request.miss_count as usize);
+        .misses(request.miss_count as u32);
 
     if let Some(passed_objects) = request.passed_objects {
-        builder = builder.passed_objects(passed_objects as usize);
+        builder = builder.passed_objects(passed_objects as u32);
     }
 
     let result = builder.calculate();

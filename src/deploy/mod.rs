@@ -1,5 +1,9 @@
 use crate::{context::Context, models::score::RippleScore};
-use akatsuki_pp_rs::{Beatmap, BeatmapExt, GameMode};
+use akatsuki_pp_rs::{
+    Beatmap,
+    any::PerformanceAttributes,
+    model::mode::GameMode
+};
 use redis::AsyncCommands;
 use std::{
     collections::HashMap,
@@ -50,7 +54,7 @@ async fn calculate_special_pp(
             .unwrap()
             .clone()
     } else {
-        match Beatmap::from_path(beatmap_path).await {
+        match Beatmap::from_path(beatmap_path) {
             Ok(beatmap) => {
                 recalc_mutex
                     .beatmaps
@@ -69,10 +73,10 @@ async fn calculate_special_pp(
 
     drop(recalc_mutex);
 
-    let result = akatsuki_pp_rs::osu_2019::OsuPP::new(&beatmap)
+    let result = akatsuki_pp_rs::osu_2019::OsuPP::from_map(&beatmap)
         .mods(request.mods as u32)
-        .combo(request.max_combo as usize)
-        .misses(request.miss_count as usize)
+        .combo(request.max_combo as u32)
+        .misses(request.miss_count as u32)
         .accuracy(request.accuracy)
         .calculate();
 
@@ -103,7 +107,7 @@ async fn calculate_rosu_pp(
             .unwrap()
             .clone()
     } else {
-        match Beatmap::from_path(beatmap_path).await {
+        match Beatmap::from_path(beatmap_path) {
             Ok(beatmap) => {
                 recalc_mutex
                     .beatmaps
@@ -123,18 +127,20 @@ async fn calculate_rosu_pp(
     drop(recalc_mutex);
 
     let result = beatmap
-        .pp()
-        .mode(match request.mode {
+        .performance()
+        .try_mode(match request.mode {
             0 => GameMode::Osu,
             1 => GameMode::Taiko,
             2 => GameMode::Catch,
             3 => GameMode::Mania,
             _ => unreachable!(),
         })
+        .unwrap()
+        .lazer(false)
         .mods(request.mods as u32)
-        .combo(request.max_combo as usize)
+        .combo(request.max_combo as u32)
         .accuracy(request.accuracy as f64)
-        .n_misses(request.miss_count as usize)
+        .misses(request.miss_count as u32)
         .calculate();
 
     let mut pp = round(result.pp() as f32, 2);
