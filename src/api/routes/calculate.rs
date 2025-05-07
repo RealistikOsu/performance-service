@@ -1,13 +1,14 @@
 use crate::config::Config;
-use akatsuki_pp_rs::{
-    Beatmap,
-    any::PerformanceAttributes,
-    model::mode::GameMode
-};
+use akatsuki_pp_rs::Beatmap as AkatsukiBeatmap;
 use axum::{
     extract::Extension,
     routing::{get, post},
     Json, Router,
+};
+use rosu_pp::{ // TODO: Figure out how to merge 2019 pp with latest pp
+    Beatmap,
+    model::mode::GameMode,
+    any::PerformanceAttributes
 };
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -65,7 +66,7 @@ async fn calculate_relax_pp(
     beatmap_path: PathBuf,
     request: &CalculateRequest,
 ) -> CalculateResponse {
-    let beatmap = match Beatmap::from_path(beatmap_path) {
+    let beatmap = match AkatsukiBeatmap::from_path(beatmap_path) {
         Ok(beatmap) => beatmap,
         Err(_) => {
             return CalculateResponse {
@@ -160,7 +161,7 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
             stars,
             pp,
             ar: result.difficulty.ar as f32,
-            od: result.difficulty.od as f32,
+            od: result.difficulty.od() as f32, // Why is it a function now
             max_combo: result.difficulty.max_combo as i32,
         },
         PerformanceAttributes::Taiko(result) => CalculateResponse {
@@ -188,7 +189,6 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
 }
 
 const RX: i32 = 1 << 7;
-const AP: i32 = 1 << 13;
 
 async fn download_beatmap(beatmap_path: PathBuf, request: &CalculateRequest) -> anyhow::Result<()> {
     let response = reqwest::get(&format!("https://old.ppy.sh/osu/{}", request.beatmap_id))
