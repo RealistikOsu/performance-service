@@ -1,15 +1,9 @@
 use crate::{context::Context, models::score::RippleScore};
-use akatsuki_pp_rs::{
-    Beatmap,
-    any::PerformanceAttributes,
-    model::mode::GameMode
-};
+use akatsuki_pp_rs::Beatmap as AkatsukiBeatmap;
 use redis::AsyncCommands;
+use rosu_pp::{model::mode::GameMode, Beatmap};
 use std::{
-    collections::HashMap,
-    io::Cursor,
-    path::{Path, PathBuf},
-    sync::Arc,
+    collections::HashMap, hash::Hash, io::Cursor, path::{Path, PathBuf}, sync::Arc
 };
 
 use std::io::Write;
@@ -47,17 +41,17 @@ async fn calculate_special_pp(
 ) -> CalculateResponse {
     let mut recalc_mutex = recalc_ctx.lock().await;
 
-    let beatmap = if recalc_mutex.beatmaps.contains_key(&request.beatmap_id) {
+    let beatmap = if recalc_mutex.rx_beatmaps.contains_key(&request.beatmap_id) {
         recalc_mutex
-            .beatmaps
+            .rx_beatmaps
             .get(&request.beatmap_id)
             .unwrap()
             .clone()
     } else {
-        match Beatmap::from_path(beatmap_path) {
+        match AkatsukiBeatmap::from_path(beatmap_path) {
             Ok(beatmap) => {
                 recalc_mutex
-                    .beatmaps
+                    .rx_beatmaps
                     .insert(request.beatmap_id, beatmap.clone());
 
                 beatmap
@@ -559,6 +553,7 @@ async fn recalculate_mode_users(mode: i32, rx: i32, ctx: Arc<Context>) -> anyhow
 
 struct RecalculateContext {
     pub beatmaps: HashMap<i32, Beatmap>,
+    pub rx_beatmaps: HashMap<i32, AkatsukiBeatmap>,
 }
 
 pub async fn serve(context: Context) -> anyhow::Result<()> {
@@ -592,6 +587,7 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
 
     let recalculate_context = Arc::new(Mutex::new(RecalculateContext {
         beatmaps: HashMap::new(),
+        rx_beatmaps: HashMap::new(),
     }));
 
     let context_arc = Arc::new(context);
