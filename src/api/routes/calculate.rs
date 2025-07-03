@@ -1,11 +1,10 @@
 use crate::config::Config;
-use akatsuki_pp_rs::Beatmap as AkatsukiBeatmap;
 use axum::{
     extract::Extension,
     routing::{get, post},
     Json, Router,
 };
-use rosu_pp::{ // TODO: Figure out how to merge 2019 pp with latest pp
+use akatsuki_pp_rs::{
     Beatmap,
     model::mode::GameMode,
     any::PerformanceAttributes
