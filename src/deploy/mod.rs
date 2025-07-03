@@ -47,7 +47,7 @@ async fn calculate_special_pp(
             .unwrap()
             .clone()
     } else {
-        match AkatsukiBeatmap::from_path(beatmap_path) {
+        match Beatmap::from_path(beatmap_path) {
             Ok(beatmap) => {
                 recalc_mutex
                     .beatmaps

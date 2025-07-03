@@ -65,7 +65,7 @@ async fn calculate_relax_pp(
     beatmap_path: PathBuf,
     request: &CalculateRequest,
 ) -> CalculateResponse {
-    let beatmap = match AkatsukiBeatmap::from_path(beatmap_path) {
+    let beatmap = match Beatmap::from_path(beatmap_path) {
         Ok(beatmap) => beatmap,
         Err(_) => {
             return CalculateResponse {
