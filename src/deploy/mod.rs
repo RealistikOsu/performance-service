@@ -1,7 +1,6 @@
 use crate::{context::Context, models::score::RippleScore};
-use akatsuki_pp_rs::Beatmap as AkatsukiBeatmap;
 use redis::AsyncCommands;
-use rosu_pp::{model::mode::GameMode, Beatmap};
+use akatsuki_pp_rs::{model::mode::GameMode, Beatmap};
 use std::{
     collections::HashMap, hash::Hash, io::Cursor, path::{Path, PathBuf}, sync::Arc
 };
@@ -41,7 +40,7 @@ async fn calculate_special_pp(
 ) -> CalculateResponse {
     let mut recalc_mutex = recalc_ctx.lock().await;
 
-    let beatmap = if recalc_mutex.rx_beatmaps.contains_key(&request.beatmap_id) {
+    let beatmap = if recalc_mutex.beatmaps.contains_key(&request.beatmap_id) {
         recalc_mutex
             .rx_beatmaps
             .get(&request.beatmap_id)
@@ -271,10 +270,19 @@ async fn recalculate_mode_scores(
                 let response =
                     reqwest::get(&format!("https://old.ppy.sh/osu/{}", score.beatmap_id))
                         .await?
-                        .error_for_status()?;
+                        .error_for_status();
+
+                if response.is_err() {
+                    log::warn!(
+                        "Failed to get .osu for beatmap {}",
+                        score.beatmap_id
+                    );
+                }
+
+                let resp = response.unwrap();
 
                 let mut file = File::create(&beatmap_path).await?;
-                let mut content = Cursor::new(response.bytes().await?);
+                let mut content = Cursor::new(resp.bytes().await?);
                 tokio::io::copy(&mut content, &mut file).await?;
             }
 
@@ -553,7 +561,6 @@ async fn recalculate_mode_users(mode: i32, rx: i32, ctx: Arc<Context>) -> anyhow
 
 struct RecalculateContext {
     pub beatmaps: HashMap<i32, Beatmap>,
-    pub rx_beatmaps: HashMap<i32, AkatsukiBeatmap>,
 }
 
 pub async fn serve(context: Context) -> anyhow::Result<()> {
@@ -587,7 +594,6 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
 
     let recalculate_context = Arc::new(Mutex::new(RecalculateContext {
         beatmaps: HashMap::new(),
-        rx_beatmaps: HashMap::new(),
     }));
 
     let context_arc = Arc::new(context);

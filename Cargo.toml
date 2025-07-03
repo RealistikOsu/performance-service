@@ -1,6 +1,6 @@
 [package]
 name = "performance-service"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 license = "MIT"
 authors = ["tsunyoku <tsunyoku@gmail.com>", "Aochi <me@aochi.uk>"]
@@ -31,6 +31,5 @@ bcrypt = "0.13.0"
 uuid = { version = "1.2.1", features = ["v4"] }
 futures = "0.3.17"
 strsim = "0.10.0"
-akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "f478254c79148a4ad7ce721a38418e21120d101e" }
-rosu-pp = "3.0.0"
+akatsuki-pp-rs = { package = "akatsuki-pp", git = "https://github.com/RealistikOsu/akatsuki-pp-rs", rev = "1d7824b7ace84fc5b67286d3eeb9a84f8ef16bb4" }
 reqwest = "0.11"
