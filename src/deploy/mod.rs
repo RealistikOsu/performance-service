@@ -42,7 +42,7 @@ async fn calculate_special_pp(
 
     let beatmap = if recalc_mutex.beatmaps.contains_key(&request.beatmap_id) {
         recalc_mutex
-            .rx_beatmaps
+            .beatmaps
             .get(&request.beatmap_id)
             .unwrap()
             .clone()
@@ -50,7 +50,7 @@ async fn calculate_special_pp(
         match AkatsukiBeatmap::from_path(beatmap_path) {
             Ok(beatmap) => {
                 recalc_mutex
-                    .rx_beatmaps
+                    .beatmaps
                     .insert(request.beatmap_id, beatmap.clone());
 
                 beatmap
