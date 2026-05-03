@@ -1,13 +1,9 @@
 use crate::config::Config;
+use akatsuki_pp_rs::{any::PerformanceAttributes, model::mode::GameMode, Beatmap};
 use axum::{
     extract::Extension,
     routing::{get, post},
     Json, Router,
-};
-use akatsuki_pp_rs::{
-    Beatmap,
-    model::mode::GameMode,
-    any::PerformanceAttributes
 };
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -45,6 +41,7 @@ pub struct CalculateRequest {
     pub accuracy: f32,
     pub miss_count: i32,
     pub passed_objects: Option<i32>,
+    pub playback_rate: Option<f32>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -86,6 +83,10 @@ async fn calculate_relax_pp(
 
     if let Some(passed_objects) = request.passed_objects {
         builder = builder.passed_objects(passed_objects as u32);
+    }
+
+    if let Some(playback_rate) = request.playback_rate {
+        builder = builder.clock_rate(playback_rate as f64)
     }
 
     let result = builder.calculate();

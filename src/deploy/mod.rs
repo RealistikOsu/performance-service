@@ -1,8 +1,12 @@
 use crate::{context::Context, models::score::RippleScore};
-use redis::AsyncCommands;
 use akatsuki_pp_rs::{model::mode::GameMode, Beatmap};
+use redis::AsyncCommands;
 use std::{
-    collections::HashMap, hash::Hash, io::Cursor, path::{Path, PathBuf}, sync::Arc
+    collections::HashMap,
+    hash::Hash,
+    io::Cursor,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use std::io::Write;
@@ -273,10 +277,7 @@ async fn recalculate_mode_scores(
                         .error_for_status();
 
                 if response.is_err() {
-                    log::warn!(
-                        "Failed to get .osu for beatmap {}",
-                        score.beatmap_id
-                    );
+                    log::warn!("Failed to get .osu for beatmap {}", score.beatmap_id);
                 }
 
                 let resp = response.unwrap();
