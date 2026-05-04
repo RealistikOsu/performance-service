@@ -21,6 +21,7 @@ pub struct CalculateRequest {
     pub max_combo: i32,
     pub accuracy: f32,
     pub miss_count: i32,
+    pub playback_rate: f32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -75,6 +76,7 @@ async fn calculate_special_pp(
         .combo(request.max_combo as u32)
         .misses(request.miss_count as u32)
         .accuracy(request.accuracy)
+        .clock_rate(request.playback_rate as f64)
         .calculate();
 
     let mut pp = round(result.pp as f32, 2);
@@ -166,6 +168,7 @@ async fn recalculate_score(
         max_combo: score.max_combo,
         accuracy: score.accuracy,
         miss_count: score.count_misses,
+        playback_rate: score.playback_rate,
     };
 
     let response = if score.mods & RX > 0 && score.play_mode == 0 {
@@ -427,7 +430,7 @@ async fn recalculate_user(
 
     let scores: Vec<RippleScore> = sqlx::query_as(
         &format!(
-            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, s.300_count, 
+            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, s.playback_rate, s.300_count, 
             s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed, 
             s.accuracy, s.pp, b.beatmap_id, b.beatmapset_id 
             FROM {} s 
