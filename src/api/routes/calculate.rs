@@ -86,7 +86,7 @@ async fn calculate_relax_pp(
     }
 
     if let Some(playback_rate) = request.playback_rate {
-        builder = builder.clock_rate(playback_rate as f64)
+        builder = builder.clock_rate(playback_rate as f64);
     }
 
     let result = builder.calculate();
@@ -142,6 +142,10 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
 
     if let Some(passed_objects) = request.passed_objects {
         builder = builder.passed_objects(passed_objects as u32);
+    }
+
+    if let Some(playback_rate) = request.playback_rate {
+        builder = builder.clock_rate(playback_rate as f64);
     }
 
     let result = builder.calculate();
