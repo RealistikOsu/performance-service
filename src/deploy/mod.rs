@@ -140,6 +140,7 @@ async fn calculate_rosu_pp(
         .combo(request.max_combo as u32)
         .accuracy(request.accuracy as f64)
         .misses(request.miss_count as u32)
+        .clock_rate(request.playback_rate as f64)
         .calculate();
 
     let mut pp = round(result.pp() as f32, 2);
