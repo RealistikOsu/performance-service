@@ -169,7 +169,7 @@ async fn recalculate_score(
         max_combo: score.max_combo,
         accuracy: score.accuracy,
         miss_count: score.count_misses,
-        playback_rate: score.playback_rate,
+        playback_rate: score.playback_rate as f32,
     };
 
     let response = if score.mods & RX > 0 && score.play_mode == 0 {
@@ -244,7 +244,7 @@ async fn recalculate_mode_scores(
 
     let scores: Vec<RippleScore> = sqlx::query_as(
         &format!(
-            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, s.playback_rate, s.300_count,
+            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, (s.playback_rate + 0.0) AS playback_rate, s.300_count,
             s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed,
             s.accuracy, s.pp, b.beatmap_id, b.beatmapset_id
             FROM {} s
@@ -431,7 +431,7 @@ async fn recalculate_user(
 
     let scores: Vec<RippleScore> = sqlx::query_as(
         &format!(
-            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, s.playback_rate, s.300_count, 
+            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, (s.playback_rate + 0.0) AS playback_rate, s.300_count, 
             s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed, 
             s.accuracy, s.pp, b.beatmap_id, b.beatmapset_id 
             FROM {} s 

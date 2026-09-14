@@ -152,7 +152,7 @@ pub struct RippleScore {
     pub max_combo: i32,
     pub full_combo: bool,
     pub mods: i32,
-    pub playback_rate: f32,
+    pub playback_rate: f64,
 
     #[serde(rename = "300_count")]
     #[sqlx(rename = "300_count")]
