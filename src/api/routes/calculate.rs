@@ -5,6 +5,10 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use rosu_mods::{
+    serde::GameModsSeed, GameMode as LazerGameMode, GameMods as LazerMods,
+};
+use serde::de::DeserializeSeed;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -42,6 +46,51 @@ pub struct CalculateRequest {
     pub miss_count: i32,
     pub passed_objects: Option<i32>,
     pub playback_rate: Option<f32>,
+    /// Lazer's Classic (CL) mod has no legacy bitfield equivalent (it's lazer-only),
+    /// so it can't be represented in `mods`. Callers set this explicitly instead.
+    /// Like Relax, Classic-modded scores are calculated with the 2019 algorithm.
+    #[serde(default)]
+    pub classic: bool,
+    /// True when the score was submitted from osu!lazer rather than stable. Selects
+    /// lazer scoring-v2-aware difficulty/performance calculation (see rosu-pp's
+    /// `.lazer()`) on the modern (non-2019) calculation path. Defaults to false so
+    /// existing stable-only callers are unaffected.
+    #[serde(default)]
+    pub lazer: bool,
+    /// Lazer's full mod list (acronym + settings), e.g. `[{"acronym":"DT","settings":
+    /// {"speed_change":1.2}}]` — same wire shape as the client sends. When present,
+    /// the modern calculation path (calculate_rosu_pp) uses this instead of `mods`
+    /// so mod settings (custom DT/HT rate, etc.) and lazer-exclusive mods with no
+    /// legacy bit are accounted for. The 2019 path (calculate_relax_pp) can't accept
+    /// rich mods at all — it only pulls the clock rate out of this, everything else
+    /// about mod semantics there still comes from the legacy `mods` bitfield.
+    ///
+    /// Kept as raw JSON rather than `LazerMods` directly: rosu_mods mod
+    /// deserialization is mode-dependent (an acronym maps to a different concrete
+    /// mod struct per ruleset) and needs `mode` as seed context, which plain derived
+    /// `Deserialize` can't provide from a sibling field. See `parsed_lazer_mods()`.
+    #[serde(default)]
+    pub lazer_mods: Option<serde_json::Value>,
+}
+
+impl CalculateRequest {
+    fn parsed_lazer_mods(&self) -> Option<LazerMods> {
+        let value = self.lazer_mods.clone()?;
+        let mode = match self.mode {
+            0 => LazerGameMode::Osu,
+            1 => LazerGameMode::Taiko,
+            2 => LazerGameMode::Catch,
+            3 => LazerGameMode::Mania,
+            _ => return None,
+        };
+
+        GameModsSeed::Mode {
+            mode,
+            deny_unknown_fields: false,
+        }
+        .deserialize(value)
+        .ok()
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -85,8 +134,18 @@ async fn calculate_relax_pp(
         builder = builder.passed_objects(passed_objects as u32);
     }
 
-    if let Some(playback_rate) = request.playback_rate {
-        builder = builder.clock_rate(playback_rate as f64);
+    // osu_2019::OsuPP only understands the legacy `mods` bitfield (set above), so
+    // rich lazer mod semantics (AS, DA, etc.) are lost here regardless — we only
+    // pull the clock rate out of lazer_mods, since custom DT/HT rate is otherwise
+    // silently dropped by the bitfield. Falls back to the explicit playback_rate
+    // field for callers that don't send lazer_mods.
+    let clock_rate = request
+        .parsed_lazer_mods()
+        .and_then(|m| m.clock_rate())
+        .or(request.playback_rate.map(|r| r as f64));
+
+    if let Some(clock_rate) = clock_rate {
+        builder = builder.clock_rate(clock_rate);
     }
 
     let result = builder.calculate();
@@ -134,18 +193,24 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
             _ => unreachable!(),
         })
         .unwrap()
-        .lazer(false)
-        .mods(request.mods as u32)
+        .lazer(request.lazer)
         .combo(request.max_combo as u32)
         .accuracy(request.accuracy as f64)
         .misses(request.miss_count as u32);
 
+    // Prefer the full lazer mod list when present (carries settings like custom
+    // DT/HT rate and lazer-exclusive mods with no legacy bit) over the legacy
+    // bitfield. rosu-pp derives clock rate from the mods object itself here, so
+    // (unlike the 2019 path) no separate playback_rate handling is needed once
+    // real mods are passed through — an explicit rate field would just be a second,
+    // possibly-conflicting source of truth for something the mods already encode.
+    builder = match request.parsed_lazer_mods() {
+        Some(lazer_mods) => builder.mods(lazer_mods),
+        None => builder.mods(request.mods as u32),
+    };
+
     if let Some(passed_objects) = request.passed_objects {
         builder = builder.passed_objects(passed_objects as u32);
-    }
-
-    if let Some(playback_rate) = request.playback_rate {
-        builder = builder.clock_rate(playback_rate as f64);
     }
 
     let result = builder.calculate();
@@ -233,7 +298,12 @@ async fn calculate_play(
             }
         }
 
-        let result = if request.mods & RX > 0 && request.mode == 0 {
+        // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence `mode == 0` gating
+        // both branches below. Classic-modded scores use the same 2019 algorithm as
+        // Relax since CL deliberately reverts scoring/difficulty to stable-era rules.
+        let use_2019_pp = request.mode == 0 && (request.mods & RX > 0 || request.classic);
+
+        let result = if use_2019_pp {
             calculate_relax_pp(beatmap_path, &request).await
         } else {
             calculate_rosu_pp(beatmap_path, &request).await
