@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use rosu_mods::{
-    serde::GameModsSeed, GameMode as LazerGameMode, GameMods as LazerMods,
+    serde::GameModsSeed, GameModIntermode, GameMode as LazerGameMode, GameMods as LazerMods,
 };
 use serde::de::DeserializeSeed;
 use std::io::Cursor;
@@ -46,11 +46,6 @@ pub struct CalculateRequest {
     pub miss_count: i32,
     pub passed_objects: Option<i32>,
     pub playback_rate: Option<f32>,
-    /// Lazer's Classic (CL) mod has no legacy bitfield equivalent (it's lazer-only),
-    /// so it can't be represented in `mods`. Callers set this explicitly instead.
-    /// Like Relax, Classic-modded scores are calculated with the 2019 algorithm.
-    #[serde(default)]
-    pub classic: bool,
     /// True when the score was submitted from osu!lazer rather than stable. Selects
     /// lazer scoring-v2-aware difficulty/performance calculation (see rosu-pp's
     /// `.lazer()`) on the modern (non-2019) calculation path. Defaults to false so
@@ -90,6 +85,14 @@ impl CalculateRequest {
         }
         .deserialize(value)
         .ok()
+    }
+
+    /// Classic (CL) has no legacy bitfield bit — it's lazer-only — so it can only be
+    /// read out of `lazer_mods`. Stable-only callers never send that field, so this
+    /// is naturally always false for them.
+    fn classic(&self) -> bool {
+        self.parsed_lazer_mods()
+            .is_some_and(|m| m.contains_intermode(GameModIntermode::Classic))
     }
 }
 
@@ -301,7 +304,7 @@ async fn calculate_play(
         // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence `mode == 0` gating
         // both branches below. Classic-modded scores use the same 2019 algorithm as
         // Relax since CL deliberately reverts scoring/difficulty to stable-era rules.
-        let use_2019_pp = request.mode == 0 && (request.mods & RX > 0 || request.classic);
+        let use_2019_pp = request.mode == 0 && (request.mods & RX > 0 || request.classic());
 
         let result = if use_2019_pp {
             calculate_relax_pp(beatmap_path, &request).await
