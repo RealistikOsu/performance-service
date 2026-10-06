@@ -409,14 +409,38 @@ struct LazerBestPlay {
     accuracy: f64,
 }
 
-/// Rebuilds a player's lazer_stats pp and accuracy for a mode from their best lazer play on each ranked beatmap.
-async fn recalculate_lazer_user(user_id: i32, mode: i32, ctx: Arc<Context>) -> anyhow::Result<()> {
+/// Variant 0 is vanilla, 1 relax and 2 autopilot, matching the stable boards that exist for each mode.
+fn lazer_variants(mode: i32) -> &'static [i32] {
+    match mode {
+        0 => &[0, 1, 2],
+        1 | 2 => &[0, 1],
+        _ => &[0],
+    }
+}
+
+fn lazer_variant_names(variant: i32) -> (&'static str, &'static str) {
+    match variant {
+        0 => ("lazer_stats", "ripple:leaderboard_lazer"),
+        1 => ("lazer_rx_stats", "ripple:leaderboard_lazer_relax"),
+        2 => ("lazer_ap_stats", "ripple:leaderboard_lazer_ap"),
+        _ => unreachable!(),
+    }
+}
+
+/// Rebuilds a player's pp and accuracy for a mode and lazer variant from their best plays of that variant on each ranked beatmap.
+async fn recalculate_lazer_user(
+    user_id: i32,
+    mode: i32,
+    variant: i32,
+    ctx: Arc<Context>,
+) -> anyhow::Result<()> {
     let plays: Vec<LazerBestPlay> = sqlx::query_as(
         "SELECT best.pp, best.accuracy FROM (
             SELECT l.pp, l.accuracy, ROW_NUMBER() OVER (PARTITION BY l.beatmap_md5 ORDER BY l.pp DESC) AS rn
             FROM lazer_scores l
             INNER JOIN beatmaps b USING(beatmap_md5)
-            WHERE l.user_id = ? AND l.ruleset_id = ? AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)
+            WHERE l.user_id = ? AND l.ruleset_id = ? AND l.variant = ? AND l.passed = 1 AND l.pp > 0
+                AND b.ranked IN (2, 3)
         ) best
         WHERE best.rn = 1
         ORDER BY best.pp DESC
@@ -424,6 +448,7 @@ async fn recalculate_lazer_user(user_id: i32, mode: i32, ctx: Arc<Context>) -> a
     )
     .bind(user_id)
     .bind(mode)
+    .bind(variant)
     .fetch_all(&ctx.database)
     .await?;
 
@@ -454,10 +479,13 @@ async fn recalculate_lazer_user(user_id: i32, mode: i32, ctx: Arc<Context>) -> a
         _ => unreachable!(),
     };
 
+    let (stats_table, leaderboard_key) = lazer_variant_names(variant);
+
     sqlx::query(&format!(
-        "INSERT INTO lazer_stats (id, username, pp_{prefix}, avg_accuracy_{prefix})
+        "INSERT INTO {table} (id, username, pp_{prefix}, avg_accuracy_{prefix})
         SELECT id, username, ?, ? FROM users WHERE id = ?
         ON DUPLICATE KEY UPDATE pp_{prefix} = ?, avg_accuracy_{prefix} = ?",
+        table = stats_table,
         prefix = stats_prefix
     ))
     .bind(new_pp)
@@ -477,7 +505,7 @@ async fn recalculate_lazer_user(user_id: i32, mode: i32, ctx: Arc<Context>) -> a
     let mut redis_connection = ctx.redis.get_async_connection().await?;
 
     if user_privileges & 1 > 0 {
-        let leaderboard = format!("ripple:leaderboard_lazer:{}", stats_prefix);
+        let leaderboard = format!("{}:{}", leaderboard_key, stats_prefix);
         let country_leaderboard = format!("{}:{}", leaderboard, country.to_lowercase());
 
         if new_pp > 0 {
@@ -504,9 +532,10 @@ async fn recalculate_lazer_user(user_id: i32, mode: i32, ctx: Arc<Context>) -> a
         .await?;
 
     log::info!(
-        "Recalculated lazer user {} in mode {} | pp: {}",
+        "Recalculated lazer user {} in mode {} (variant: {}) | pp: {}",
         user_id,
         mode,
+        variant,
         new_pp
     );
 
@@ -515,6 +544,18 @@ async fn recalculate_lazer_user(user_id: i32, mode: i32, ctx: Arc<Context>) -> a
 
 /// Covers players with lazer scores in the mode, and those whose stored pp may need zeroing.
 async fn recalculate_mode_lazer_users(mode: i32, ctx: Arc<Context>) -> anyhow::Result<()> {
+    for &variant in lazer_variants(mode) {
+        recalculate_mode_lazer_variant_users(mode, variant, ctx.clone()).await?;
+    }
+
+    Ok(())
+}
+
+async fn recalculate_mode_lazer_variant_users(
+    mode: i32,
+    variant: i32,
+    ctx: Arc<Context>,
+) -> anyhow::Result<()> {
     let stats_prefix = match mode {
         0 => "std",
         1 => "taiko",
@@ -524,12 +565,14 @@ async fn recalculate_mode_lazer_users(mode: i32, ctx: Arc<Context>) -> anyhow::R
     };
 
     let user_ids: Result<Vec<(i32,)>, sqlx::Error> = sqlx::query_as(&format!(
-        "SELECT user_id FROM lazer_scores WHERE ruleset_id = ? AND passed = 1 AND pp > 0
+        "SELECT user_id FROM lazer_scores WHERE ruleset_id = ? AND variant = ? AND passed = 1 AND pp > 0
         UNION
-        SELECT id FROM lazer_stats WHERE pp_{} > 0",
+        SELECT id FROM {} WHERE pp_{} > 0",
+        lazer_variant_names(variant).0,
         stats_prefix
     ))
     .bind(mode)
+    .bind(variant)
     .fetch_all(&ctx.database)
     .await;
 
@@ -546,7 +589,7 @@ async fn recalculate_mode_lazer_users(mode: i32, ctx: Arc<Context>) -> anyhow::R
         let mut futures = Vec::with_capacity(user_id_chunk.len());
 
         for (user_id,) in user_id_chunk {
-            let future = tokio::spawn(recalculate_lazer_user(user_id, mode, ctx.clone()));
+            let future = tokio::spawn(recalculate_lazer_user(user_id, mode, variant, ctx.clone()));
             futures.push(future);
         }
 
