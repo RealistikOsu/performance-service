@@ -47,6 +47,7 @@ async fn main() -> anyhow::Result<()> {
     match context.config.app_component.as_str() {
         "mass_recalc" => mass_recalc::serve(context).await?,
         "deploy" => deploy::serve(context).await?,
+        "lazer_deploy" => deploy::serve_lazer(context).await?,
         "recalc" => deploy::recalc_single(context).await?,
         _ => panic!("unknown app component"),
     }

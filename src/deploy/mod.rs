@@ -319,17 +319,49 @@ struct LazerScoreRow {
     mods: String,
     statistics: String,
     pp: f32,
+    ranked_mods: bool,
 }
 
-/// Recalculates the pp of osu!lazer scores that earned any, the way the lazer server calculates it on submission:
+const LAZER_ANY_SETTINGS: [&str; 17] = [
+    "AC", "AL", "BL", "CO", "MU", "NS", "PF", "SD", "SG", "SW", "TC", "DT", "HT", "NC", "DC", "RX",
+    "AP",
+];
+const LAZER_DEFAULT_SETTINGS: [&str; 13] = [
+    "EZ", "HD", "HR", "FL", "NF", "SO", "TD", "4K", "5K", "6K", "7K", "8K", "9K",
+];
+
+/// Mirrors the lazer server's `PpMods`: a play counts only when every mod is one lazer ranks (kept with default settings
+/// unless it's a rate change), or RX/AP.
+fn lazer_mods_ranked(mode: i32, mods: &serde_json::Value) -> bool {
+    mods.as_array().map_or(true, |mods| {
+        mods.iter().all(|m| {
+            let acronym = m["acronym"].as_str().unwrap_or_default();
+            let has_settings = m["settings"].as_object().map_or(false, |s| !s.is_empty());
+
+            if LAZER_ANY_SETTINGS.contains(&acronym) {
+                return true;
+            }
+
+            let ranked = match acronym {
+                "MR" => mode == 3,
+                "HR" => mode != 3,
+                _ => LAZER_DEFAULT_SETTINGS.contains(&acronym),
+            };
+
+            ranked && !has_settings
+        })
+    })
+}
+
+/// Recalculates the pp of passed osu!lazer scores on ranked maps, whatever their mods, the way the lazer server calculates it on submission:
 /// from the stored mods and statistics, with lazer scoring. Without this, a pp change would leave them behind.
 async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::Result<()> {
     let scores: Result<Vec<LazerScoreRow>, sqlx::Error> = sqlx::query_as(
         "SELECT l.id, l.beatmap_id, l.accuracy, l.max_combo, CAST(l.mods AS CHAR) AS mods,
-            CAST(l.statistics AS CHAR) AS statistics, l.pp
+            CAST(l.statistics AS CHAR) AS statistics, l.pp, l.ranked_mods
         FROM lazer_scores l
         INNER JOIN beatmaps b ON b.beatmap_md5 = l.beatmap_md5
-        WHERE l.ruleset_id = ? AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)",
+        WHERE l.ruleset_id = ? AND l.passed = 1 AND b.ranked IN (2, 3)",
     )
     .bind(mode)
     .fetch_all(&ctx.database)
@@ -366,6 +398,7 @@ async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::
         }
 
         let lazer_mods: serde_json::Value = serde_json::from_str(&score.mods)?;
+        let ranked_mods = lazer_mods_ranked(mode, &lazer_mods);
         let statistics: serde_json::Value = serde_json::from_str(&score.statistics)?;
         let mut request = LazerCalculateRequest {
             beatmap_id: score.beatmap_id,
@@ -383,9 +416,10 @@ async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::
 
         let response = calculate(beatmap_path, &request).await;
 
-        if response.pp != score.pp {
-            sqlx::query("UPDATE lazer_scores SET pp = ? WHERE id = ?")
+        if response.pp != score.pp || ranked_mods != score.ranked_mods {
+            sqlx::query("UPDATE lazer_scores SET pp = ?, ranked_mods = ? WHERE id = ?")
                 .bind(response.pp)
+                .bind(ranked_mods)
                 .bind(score.id)
                 .execute(&ctx.database)
                 .await?;
@@ -852,6 +886,29 @@ async fn recalculate_mode_users(mode: i32, rx: i32, ctx: Arc<Context>) -> anyhow
         }
 
         futures::future::try_join_all(futures).await?;
+    }
+
+    Ok(())
+}
+
+/// Recalculates only osu!lazer: every passed score on a ranked map, then each player's totals and leaderboards.
+pub async fn serve_lazer(context: Context) -> anyhow::Result<()> {
+    print!("Enter the modes (comma delimited) to deploy: ");
+    std::io::stdout().flush().unwrap();
+
+    let mut modes_str = String::new();
+    std::io::stdin().read_line(&mut modes_str)?;
+    let modes = modes_str
+        .trim()
+        .split(',')
+        .map(|s| s.parse::<i32>().unwrap())
+        .collect::<Vec<_>>();
+
+    let context = Arc::new(context);
+
+    for mode in modes {
+        recalculate_mode_lazer_scores(mode, context.clone()).await?;
+        recalculate_mode_lazer_users(mode, context.clone()).await?;
     }
 
     Ok(())
