@@ -439,8 +439,8 @@ async fn recalculate_lazer_user(
             SELECT l.pp, l.accuracy, ROW_NUMBER() OVER (PARTITION BY l.beatmap_md5 ORDER BY l.pp DESC) AS rn
             FROM lazer_scores l
             INNER JOIN beatmaps b USING(beatmap_md5)
-            WHERE l.user_id = ? AND l.ruleset_id = ? AND l.variant = ? AND l.passed = 1 AND l.pp > 0
-                AND b.ranked IN (2, 3)
+            WHERE l.user_id = ? AND l.ruleset_id = ? AND l.variant = ? AND l.ranked_mods = 1 AND l.passed = 1
+                AND l.pp > 0 AND b.ranked IN (2, 3)
         ) best
         WHERE best.rn = 1
         ORDER BY best.pp DESC
@@ -565,7 +565,7 @@ async fn recalculate_mode_lazer_variant_users(
     };
 
     let user_ids: Result<Vec<(i32,)>, sqlx::Error> = sqlx::query_as(&format!(
-        "SELECT user_id FROM lazer_scores WHERE ruleset_id = ? AND variant = ? AND passed = 1 AND pp > 0
+        "SELECT user_id FROM lazer_scores WHERE ruleset_id = ? AND variant = ? AND ranked_mods = 1 AND passed = 1 AND pp > 0
         UNION
         SELECT id FROM {} WHERE pp_{} > 0",
         lazer_variant_names(variant).0,
