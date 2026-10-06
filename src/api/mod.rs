@@ -6,7 +6,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::config::Config;
 
-mod routes;
+pub mod routes;
 
 fn api_router() -> Router {
     routes::calculate::router()

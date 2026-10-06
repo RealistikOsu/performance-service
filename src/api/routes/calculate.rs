@@ -69,7 +69,7 @@ pub struct CalculateRequest {
 }
 
 impl CalculateRequest {
-    fn parsed_lazer_mods(&self) -> Option<LazerMods> {
+    pub fn parsed_lazer_mods(&self) -> Option<LazerMods> {
         let value = self.lazer_mods.clone()?;
         let mode = match self.mode {
             0 => LazerGameMode::Osu,
@@ -301,19 +301,21 @@ async fn calculate_play(
             }
         }
 
-        // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence `mode == 0` gating
-        // both branches below. Classic-modded scores use the same 2019 algorithm as
-        // Relax since CL deliberately reverts scoring/difficulty to stable-era rules.
-        let use_2019_pp = request.mode == 0 && (request.mods & RX > 0 || request.classic());
-
-        let result = if use_2019_pp {
-            calculate_relax_pp(beatmap_path, &request).await
-        } else {
-            calculate_rosu_pp(beatmap_path, &request).await
-        };
-
-        results.push(result);
+        results.push(calculate(beatmap_path, &request).await);
     }
 
     Json(results)
+}
+
+pub async fn calculate(beatmap_path: PathBuf, request: &CalculateRequest) -> CalculateResponse {
+    // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence `mode == 0` gating
+    // both branches below. Classic-modded scores use the same 2019 algorithm as
+    // Relax since CL deliberately reverts scoring/difficulty to stable-era rules.
+    let use_2019_pp = request.mode == 0 && (request.mods & RX > 0 || request.classic());
+
+    if use_2019_pp {
+        calculate_relax_pp(beatmap_path, request).await
+    } else {
+        calculate_rosu_pp(beatmap_path, request).await
+    }
 }

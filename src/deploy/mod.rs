@@ -1,4 +1,8 @@
-use crate::{context::Context, models::score::RippleScore};
+use crate::{
+    api::routes::calculate::{calculate, CalculateRequest as LazerCalculateRequest},
+    context::Context,
+    models::score::RippleScore,
+};
 use akatsuki_pp_rs::{model::mode::GameMode, Beatmap};
 use redis::AsyncCommands;
 use std::{
@@ -301,6 +305,99 @@ async fn recalculate_mode_scores(
         }
 
         futures::future::try_join_all(futures).await?;
+    }
+
+    Ok(())
+}
+
+#[derive(sqlx::FromRow)]
+struct LazerScoreRow {
+    id: i64,
+    beatmap_id: i32,
+    accuracy: f64,
+    max_combo: i32,
+    mods: String,
+    statistics: String,
+    pp: f32,
+}
+
+/// Recalculates the pp of osu!lazer scores that earned any, the way the lazer server calculates it on submission:
+/// from the stored mods and statistics, with lazer scoring. Without this, a pp change would leave them behind.
+async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::Result<()> {
+    let scores: Result<Vec<LazerScoreRow>, sqlx::Error> = sqlx::query_as(
+        "SELECT l.id, l.beatmap_id, l.accuracy, l.max_combo, CAST(l.mods AS CHAR) AS mods,
+            CAST(l.statistics AS CHAR) AS statistics, l.pp
+        FROM lazer_scores l
+        INNER JOIN beatmaps b ON b.beatmap_md5 = l.beatmap_md5
+        WHERE l.ruleset_id = ? AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)",
+    )
+    .bind(mode)
+    .fetch_all(&ctx.database)
+    .await;
+
+    let scores = match scores {
+        Ok(scores) => scores,
+        // The lazer tables haven't been migrated, so there's nothing to recalculate.
+        Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("42S02") => {
+            return Ok(())
+        }
+        Err(error) => return Err(error.into()),
+    };
+
+    for score in scores {
+        let beatmap_path =
+            Path::new(&ctx.config.beatmaps_path).join(format!("{}.osu", score.beatmap_id));
+
+        if !beatmap_path.exists() {
+            log::info!("Beatmap {} doesn't exist, fetching from bancho", score.beatmap_id);
+
+            let response = reqwest::get(&format!("https://old.ppy.sh/osu/{}", score.beatmap_id))
+                .await?
+                .error_for_status();
+
+            let Ok(response) = response else {
+                log::warn!("Failed to get .osu for beatmap {}", score.beatmap_id);
+                continue;
+            };
+
+            let mut file = File::create(&beatmap_path).await?;
+            let mut content = Cursor::new(response.bytes().await?);
+            tokio::io::copy(&mut content, &mut file).await?;
+        }
+
+        let lazer_mods: serde_json::Value = serde_json::from_str(&score.mods)?;
+        let statistics: serde_json::Value = serde_json::from_str(&score.statistics)?;
+        let mut request = LazerCalculateRequest {
+            beatmap_id: score.beatmap_id,
+            mode,
+            mods: 0,
+            max_combo: score.max_combo,
+            accuracy: (score.accuracy * 100.0) as f32,
+            miss_count: statistics["miss"].as_i64().unwrap_or(0) as i32,
+            passed_objects: None,
+            playback_rate: None,
+            lazer: true,
+            lazer_mods: Some(lazer_mods),
+        };
+        request.mods = request.parsed_lazer_mods().map_or(0, |mods| mods.bits() as i32);
+
+        let response = calculate(beatmap_path, &request).await;
+
+        if response.pp != score.pp {
+            sqlx::query("UPDATE lazer_scores SET pp = ? WHERE id = ?")
+                .bind(response.pp)
+                .bind(score.id)
+                .execute(&ctx.database)
+                .await?;
+
+            log::info!(
+                "Recalculated lazer score ID {} (mode: {}) | {} -> {}",
+                score.id,
+                mode,
+                score.pp,
+                response.pp,
+            );
+        }
     }
 
     Ok(())
@@ -653,10 +750,16 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
                     recalculate_context.clone(),
                 )
                 .await?;
+
+                // Lazer scores count towards vanilla pp only.
+                if *rx == 0 {
+                    recalculate_mode_lazer_scores(mode, context_arc.clone()).await?;
+                }
             }
         } else {
             recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
                 .await?;
+            recalculate_mode_lazer_scores(mode, context_arc.clone()).await?;
         }
     }
 
