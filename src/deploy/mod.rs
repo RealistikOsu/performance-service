@@ -403,6 +403,159 @@ async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::
     Ok(())
 }
 
+#[derive(sqlx::FromRow)]
+struct LazerBestPlay {
+    pp: f32,
+    accuracy: f64,
+}
+
+/// Rebuilds a player's lazer_stats pp and accuracy for a mode from their best lazer play on each ranked beatmap.
+async fn recalculate_lazer_user(user_id: i32, mode: i32, ctx: Arc<Context>) -> anyhow::Result<()> {
+    let plays: Vec<LazerBestPlay> = sqlx::query_as(
+        "SELECT best.pp, best.accuracy FROM (
+            SELECT l.pp, l.accuracy, ROW_NUMBER() OVER (PARTITION BY l.beatmap_md5 ORDER BY l.pp DESC) AS rn
+            FROM lazer_scores l
+            INNER JOIN beatmaps b USING(beatmap_md5)
+            WHERE l.user_id = ? AND l.ruleset_id = ? AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)
+        ) best
+        WHERE best.rn = 1
+        ORDER BY best.pp DESC
+        LIMIT 1000",
+    )
+    .bind(user_id)
+    .bind(mode)
+    .fetch_all(&ctx.database)
+    .await?;
+
+    let mut weighted_pp = 0.0;
+    let mut weighted_accuracy = 0.0;
+
+    for (idx, play) in plays.iter().take(100).enumerate() {
+        let weight = 0.95_f32.powi(idx as i32);
+        weighted_pp += play.pp * weight;
+        weighted_accuracy += play.accuracy as f32 * 100.0 * weight;
+    }
+
+    let top_count = plays.len().min(100) as i32;
+    let (new_pp, accuracy) = if plays.is_empty() {
+        (0, 0.0)
+    } else {
+        let bonus_pp = 416.6667 * (1.0 - 0.995_f32.powi(plays.len() as i32));
+        let accuracy = weighted_accuracy / (20.0 * (1.0 - 0.95_f32.powi(top_count)));
+
+        ((weighted_pp + bonus_pp).round() as i32, accuracy)
+    };
+
+    let stats_prefix = match mode {
+        0 => "std",
+        1 => "taiko",
+        2 => "ctb",
+        3 => "mania",
+        _ => unreachable!(),
+    };
+
+    sqlx::query(&format!(
+        "INSERT INTO lazer_stats (id, username, pp_{prefix}, avg_accuracy_{prefix})
+        SELECT id, username, ?, ? FROM users WHERE id = ?
+        ON DUPLICATE KEY UPDATE pp_{prefix} = ?, avg_accuracy_{prefix} = ?",
+        prefix = stats_prefix
+    ))
+    .bind(new_pp)
+    .bind(accuracy)
+    .bind(user_id)
+    .bind(new_pp)
+    .bind(accuracy)
+    .execute(&ctx.database)
+    .await?;
+
+    let (country, user_privileges): (String, i32) =
+        sqlx::query_as("SELECT country, privileges FROM users WHERE id = ?")
+            .bind(user_id)
+            .fetch_one(&ctx.database)
+            .await?;
+
+    let mut redis_connection = ctx.redis.get_async_connection().await?;
+
+    if user_privileges & 1 > 0 {
+        let leaderboard = format!("ripple:leaderboard_lazer:{}", stats_prefix);
+        let country_leaderboard = format!("{}:{}", leaderboard, country.to_lowercase());
+
+        if new_pp > 0 {
+            let _: () = redis_connection
+                .zadd(leaderboard, user_id.to_string(), new_pp)
+                .await?;
+
+            let _: () = redis_connection
+                .zadd(country_leaderboard, user_id.to_string(), new_pp)
+                .await?;
+        } else {
+            let _: () = redis_connection
+                .zrem(leaderboard, user_id.to_string())
+                .await?;
+
+            let _: () = redis_connection
+                .zrem(country_leaderboard, user_id.to_string())
+                .await?;
+        }
+    }
+
+    let _: () = redis_connection
+        .publish("peppy:update_cached_stats", user_id)
+        .await?;
+
+    log::info!(
+        "Recalculated lazer user {} in mode {} | pp: {}",
+        user_id,
+        mode,
+        new_pp
+    );
+
+    Ok(())
+}
+
+/// Covers players with lazer scores in the mode, and those whose stored pp may need zeroing.
+async fn recalculate_mode_lazer_users(mode: i32, ctx: Arc<Context>) -> anyhow::Result<()> {
+    let stats_prefix = match mode {
+        0 => "std",
+        1 => "taiko",
+        2 => "ctb",
+        3 => "mania",
+        _ => unreachable!(),
+    };
+
+    let user_ids: Result<Vec<(i32,)>, sqlx::Error> = sqlx::query_as(&format!(
+        "SELECT user_id FROM lazer_scores WHERE ruleset_id = ? AND passed = 1 AND pp > 0
+        UNION
+        SELECT id FROM lazer_stats WHERE pp_{} > 0",
+        stats_prefix
+    ))
+    .bind(mode)
+    .fetch_all(&ctx.database)
+    .await;
+
+    let user_ids = match user_ids {
+        Ok(user_ids) => user_ids,
+        // The lazer tables haven't been migrated, so there are no lazer players.
+        Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("42S02") => {
+            return Ok(())
+        }
+        Err(error) => return Err(error.into()),
+    };
+
+    for user_id_chunk in user_ids.chunks(100).map(|c| c.to_vec()) {
+        let mut futures = Vec::with_capacity(user_id_chunk.len());
+
+        for (user_id,) in user_id_chunk {
+            let future = tokio::spawn(recalculate_lazer_user(user_id, mode, ctx.clone()));
+            futures.push(future);
+        }
+
+        futures::future::try_join_all(futures).await?;
+    }
+
+    Ok(())
+}
+
 fn calculate_new_pp(scores: &Vec<RippleScore>, score_count: i32) -> i32 {
     let mut total_pp = 0.0;
 
@@ -716,15 +869,16 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
                 )
                 .await?;
 
-                // Lazer scores count towards vanilla pp only.
                 if *rx == 0 {
                     recalculate_mode_lazer_scores(mode, context_arc.clone()).await?;
+                    recalculate_mode_lazer_users(mode, context_arc.clone()).await?;
                 }
             }
         } else {
             recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
                 .await?;
             recalculate_mode_lazer_scores(mode, context_arc.clone()).await?;
+            recalculate_mode_lazer_users(mode, context_arc.clone()).await?;
         }
     }
 
