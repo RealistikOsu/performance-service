@@ -306,11 +306,11 @@ async fn recalculate_mode_scores(
     Ok(())
 }
 
-fn calculate_new_pp(scores: &Vec<RippleScore>, score_count: i32) -> i32 {
+fn calculate_new_pp(pps: &[f32], score_count: i32) -> i32 {
     let mut total_pp = 0.0;
 
-    for (idx, score) in scores.iter().enumerate() {
-        total_pp += score.pp * 0.95_f32.powi(idx as i32);
+    for (idx, pp) in pps.iter().enumerate() {
+        total_pp += pp * 0.95_f32.powi(idx as i32);
     }
 
     // bonus pp
@@ -414,13 +414,49 @@ async fn recalculate_statuses(
     Ok(())
 }
 
-async fn recalculate_user(
+/// A player's best pp on each ranked beatmap, best first, and how many beatmaps that covers. Vanilla counts
+/// osu!lazer scores too, since the lazer server and The-Pentagon write the same stats.
+async fn best_pps(
     user_id: i32,
     mode: i32,
     rx: i32,
-    ctx: Arc<Context>,
-) -> anyhow::Result<()> {
-    recalculate_statuses(user_id, mode, rx, ctx.clone()).await?;
+    ctx: &Arc<Context>,
+) -> anyhow::Result<(Vec<f32>, i32)> {
+    if rx == 0 {
+        let both: Result<Vec<f32>, sqlx::Error> = sqlx::query_scalar(
+            "SELECT best.pp FROM (
+                SELECT plays.pp, ROW_NUMBER() OVER (PARTITION BY plays.beatmap_md5 ORDER BY plays.pp DESC) AS rn
+                FROM (
+                    SELECT s.beatmap_md5, s.pp FROM scores s
+                    INNER JOIN beatmaps b USING(beatmap_md5)
+                    WHERE s.userid = ? AND s.completed = 3 AND s.play_mode = ? AND b.ranked IN (2, 3)
+                    UNION ALL
+                    SELECT l.beatmap_md5, l.pp FROM lazer_scores l
+                    INNER JOIN beatmaps b USING(beatmap_md5)
+                    WHERE l.user_id = ? AND l.ruleset_id = ? AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)
+                ) plays
+            ) best
+            WHERE best.rn = 1
+            ORDER BY best.pp DESC
+            LIMIT 1000",
+        )
+        .bind(user_id)
+        .bind(mode)
+        .bind(user_id)
+        .bind(mode)
+        .fetch_all(&ctx.database)
+        .await;
+
+        match both {
+            Ok(pps) => {
+                let count = pps.len() as i32;
+                return Ok((pps, count));
+            }
+            // The lazer tables haven't been migrated, so there's nothing from lazer to count.
+            Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("42S02") => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
 
     let scores_table = match rx {
         0 => "scores",
@@ -429,42 +465,41 @@ async fn recalculate_user(
         _ => unreachable!(),
     };
 
-    let scores: Vec<RippleScore> = sqlx::query_as(
-        &format!(
-            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, (s.playback_rate + 0e0) AS playback_rate, s.300_count, 
-            s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed, 
-            s.accuracy, s.pp, b.beatmap_id, b.beatmapset_id 
-            FROM {} s 
-            INNER JOIN 
-                beatmaps b 
-                USING(beatmap_md5) 
-            WHERE 
-                userid = ? 
-                AND completed = 3 
-                AND play_mode = ? 
-                AND ranked IN (3, 2) 
-            ORDER BY pp DESC 
-            LIMIT 100",
-            scores_table
-        )
-    )
+    let pps: Vec<f32> = sqlx::query_scalar(&format!(
+        "SELECT s.pp FROM {} s INNER JOIN beatmaps b USING(beatmap_md5)
+        WHERE s.userid = ? AND s.completed = 3 AND s.play_mode = ? AND b.ranked IN (3, 2)
+        ORDER BY s.pp DESC
+        LIMIT 100",
+        scores_table
+    ))
     .bind(user_id)
     .bind(mode)
     .fetch_all(&ctx.database)
     .await?;
 
-    let score_count: i32 = sqlx::query_scalar(
-        &format!(
-            "SELECT COUNT(s.id) FROM {} s INNER JOIN beatmaps USING(beatmap_md5) WHERE userid = ? AND completed = 3 AND play_mode = ? AND ranked IN (3, 2) LIMIT 1000",
-            scores_table
-        )
-    )
-        .bind(user_id)
-        .bind(mode)
-        .fetch_one(&ctx.database)
-        .await?;
+    let score_count: i32 = sqlx::query_scalar(&format!(
+        "SELECT COUNT(s.id) FROM {} s INNER JOIN beatmaps USING(beatmap_md5) WHERE userid = ? AND completed = 3 AND play_mode = ? AND ranked IN (3, 2) LIMIT 1000",
+        scores_table
+    ))
+    .bind(user_id)
+    .bind(mode)
+    .fetch_one(&ctx.database)
+    .await?;
 
-    let new_pp = calculate_new_pp(&scores, score_count);
+    Ok((pps, score_count))
+}
+
+async fn recalculate_user(
+    user_id: i32,
+    mode: i32,
+    rx: i32,
+    ctx: Arc<Context>,
+) -> anyhow::Result<()> {
+    recalculate_statuses(user_id, mode, rx, ctx.clone()).await?;
+
+    let (pps, score_count) = best_pps(user_id, mode, rx, &ctx).await?;
+
+    let new_pp = calculate_new_pp(&pps[..pps.len().min(100)], score_count);
 
     let stats_table = match rx {
         0 => "users_stats",
