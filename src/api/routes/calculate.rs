@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use rosu_mods::{
-    serde::GameModsSeed, GameModIntermode, GameMode as LazerGameMode, GameMods as LazerMods,
+    serde::GameModsSeed, GameMode as LazerGameMode, GameMods as LazerMods,
 };
 use serde::de::DeserializeSeed;
 use std::io::Cursor;
@@ -85,14 +85,6 @@ impl CalculateRequest {
         }
         .deserialize(value)
         .ok()
-    }
-
-    /// Classic (CL) has no legacy bitfield bit — it's lazer-only — so it can only be
-    /// read out of `lazer_mods`. Stable-only callers never send that field, so this
-    /// is naturally always false for them.
-    fn classic(&self) -> bool {
-        self.parsed_lazer_mods()
-            .is_some_and(|m| m.contains_intermode(GameModIntermode::Classic))
     }
 }
 
@@ -308,10 +300,8 @@ async fn calculate_play(
 }
 
 pub async fn calculate(beatmap_path: PathBuf, request: &CalculateRequest) -> CalculateResponse {
-    // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence `mode == 0` gating
-    // both branches below. Classic-modded scores use the same 2019 algorithm as
-    // Relax since CL deliberately reverts scoring/difficulty to stable-era rules.
-    let use_2019_pp = request.mode == 0 && (request.mods & RX > 0 || request.classic());
+    // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence the `mode == 0` gating.
+    let use_2019_pp = request.mode == 0 && request.mods & RX > 0;
 
     if use_2019_pp {
         calculate_relax_pp(beatmap_path, request).await
