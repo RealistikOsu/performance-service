@@ -968,17 +968,10 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
                     recalculate_context.clone(),
                 )
                 .await?;
-
-                if *rx == 0 {
-                    recalculate_mode_lazer_scores(mode, context_arc.clone()).await?;
-                    recalculate_mode_lazer_users(mode, context_arc.clone()).await?;
-                }
             }
         } else {
             recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
                 .await?;
-            recalculate_mode_lazer_scores(mode, context_arc.clone()).await?;
-            recalculate_mode_lazer_users(mode, context_arc.clone()).await?;
         }
     }
 
