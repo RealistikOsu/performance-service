@@ -205,15 +205,18 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
 
     // Prefer the full lazer mod list when present (carries settings like custom
     // DT/HT rate and lazer-exclusive mods with no legacy bit) over the legacy
-    // bitfield. rosu-pp derives clock rate from the mods object itself here, so
-    // (unlike the 2019 path) no separate playback_rate handling is needed once
-    // real mods are passed through — an explicit rate field would just be a second,
-    // possibly-conflicting source of truth for something the mods already encode.
+    // bitfield. rosu-pp derives clock rate from that mods object, so playback_rate
+    // only matters for callers that send the bitfield alone, like stable scores.
     builder = match request.parsed_lazer_mods() {
         Some(lazer_mods) => builder.mods(lazer_mods),
         None => {
             let builder = builder.mods(request.mods as u32);
-            match request.json_clock_rate() {
+            // Stable scores carry a custom rate (like DT at 1.03x) in playback_rate, not in the mods.
+            let rate = request
+                .json_clock_rate()
+                .or(request.playback_rate.map(f64::from))
+                .filter(|rate| *rate > 0.0);
+            match rate {
                 Some(rate) => builder.clock_rate(rate),
                 None => builder,
             }
