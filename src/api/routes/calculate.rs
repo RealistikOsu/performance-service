@@ -86,6 +86,16 @@ impl CalculateRequest {
         .deserialize(value)
         .ok()
     }
+
+    /// The custom rate of a rate mod in `lazer_mods`, read straight from the JSON for when the mod list doesn't
+    /// deserialize and the legacy bits would turn DT 1.03x into 1.5x.
+    fn json_clock_rate(&self) -> Option<f64> {
+        self.lazer_mods.as_ref()?.as_array()?.iter().find_map(|m| {
+            matches!(m["acronym"].as_str()?, "DT" | "NC" | "HT" | "DC")
+                .then(|| m["settings"]["speed_change"].as_f64())
+                .flatten()
+        })
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -201,7 +211,13 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
     // possibly-conflicting source of truth for something the mods already encode.
     builder = match request.parsed_lazer_mods() {
         Some(lazer_mods) => builder.mods(lazer_mods),
-        None => builder.mods(request.mods as u32),
+        None => {
+            let builder = builder.mods(request.mods as u32);
+            match request.json_clock_rate() {
+                Some(rate) => builder.clock_rate(rate),
+                None => builder,
+            }
+        }
     };
 
     if let Some(passed_objects) = request.passed_objects {
