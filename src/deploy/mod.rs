@@ -1,5 +1,6 @@
 use crate::{
     api::routes::calculate::{calculate, CalculateRequest as LazerCalculateRequest},
+    beatmaps,
     context::Context,
     models::score::RippleScore,
 };
@@ -8,13 +9,11 @@ use redis::AsyncCommands;
 use std::{
     collections::HashMap,
     hash::Hash,
-    io::Cursor,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use std::io::Write;
-use tokio::fs::File;
 use tokio::sync::Mutex;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -274,26 +273,9 @@ async fn recalculate_mode_scores(
             let beatmap_path =
                 Path::new(&ctx.config.beatmaps_path).join(format!("{}.osu", score.beatmap_id));
 
-            if !beatmap_path.exists() {
-                log::info!(
-                    "Beatmap {} doesn't exist, fetching from bancho",
-                    score.beatmap_id
-                );
-
-                let response =
-                    reqwest::get(&format!("https://old.ppy.sh/osu/{}", score.beatmap_id))
-                        .await?
-                        .error_for_status();
-
-                if response.is_err() {
-                    log::warn!("Failed to get .osu for beatmap {}", score.beatmap_id);
-                }
-
-                let resp = response.unwrap();
-
-                let mut file = File::create(&beatmap_path).await?;
-                let mut content = Cursor::new(resp.bytes().await?);
-                tokio::io::copy(&mut content, &mut file).await?;
+            if let Err(e) = beatmaps::ensure_cached(&beatmap_path, score.beatmap_id).await {
+                log::warn!("Couldn't get .osu for beatmap {}: {e}", score.beatmap_id);
+                continue;
             }
 
             let future = tokio::spawn(recalculate_score(
@@ -381,21 +363,9 @@ async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::
         let beatmap_path =
             Path::new(&ctx.config.beatmaps_path).join(format!("{}.osu", score.beatmap_id));
 
-        if !beatmap_path.exists() {
-            log::info!("Beatmap {} doesn't exist, fetching from bancho", score.beatmap_id);
-
-            let response = reqwest::get(&format!("https://old.ppy.sh/osu/{}", score.beatmap_id))
-                .await?
-                .error_for_status();
-
-            let Ok(response) = response else {
-                log::warn!("Failed to get .osu for beatmap {}", score.beatmap_id);
-                continue;
-            };
-
-            let mut file = File::create(&beatmap_path).await?;
-            let mut content = Cursor::new(response.bytes().await?);
-            tokio::io::copy(&mut content, &mut file).await?;
+        if let Err(e) = beatmaps::ensure_cached(&beatmap_path, score.beatmap_id).await {
+            log::warn!("Couldn't get .osu for beatmap {}: {e}", score.beatmap_id);
+            continue;
         }
 
         let lazer_mods: serde_json::Value = serde_json::from_str(&score.mods)?;

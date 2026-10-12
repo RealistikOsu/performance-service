@@ -1,3 +1,4 @@
+use crate::beatmaps;
 use crate::config::Config;
 use akatsuki_pp_rs::{any::PerformanceAttributes, model::mode::GameMode, Beatmap};
 use axum::{
@@ -9,10 +10,8 @@ use rosu_mods::{
     serde::GameModsSeed, GameMode as LazerGameMode, GameMods as LazerMods,
 };
 use serde::de::DeserializeSeed;
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::fs::File;
 
 pub fn router() -> Router {
     Router::new()
@@ -281,18 +280,6 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
 
 const RX: i32 = 1 << 7;
 
-async fn download_beatmap(beatmap_path: PathBuf, request: &CalculateRequest) -> anyhow::Result<()> {
-    let response = reqwest::get(&format!("https://old.ppy.sh/osu/{}", request.beatmap_id))
-        .await?
-        .error_for_status()?;
-
-    let mut file = File::create(&beatmap_path).await?;
-    let mut content = Cursor::new(response.bytes().await?);
-    tokio::io::copy(&mut content, &mut file).await?;
-
-    Ok(())
-}
-
 async fn calculate_play(
     Extension(config): Extension<Arc<Config>>,
     Json(requests): Json<Vec<CalculateRequest>>,
@@ -303,21 +290,16 @@ async fn calculate_play(
         let beatmap_path =
             Path::new(&config.beatmaps_path).join(format!("{}.osu", request.beatmap_id));
 
-        if !beatmap_path.exists() {
-            match download_beatmap(beatmap_path.clone(), &request).await {
-                Ok(_) => {}
-                Err(_) => {
-                    results.push(CalculateResponse {
-                        stars: 0.0,
-                        pp: 0.0,
-                        ar: 0.0,
-                        od: 0.0,
-                        max_combo: 0,
-                    });
-
-                    continue;
-                }
-            }
+        if let Err(e) = beatmaps::ensure_cached(&beatmap_path, request.beatmap_id).await {
+            log::warn!("Couldn't get .osu for beatmap {}: {e}", request.beatmap_id);
+            results.push(CalculateResponse {
+                stars: 0.0,
+                pp: 0.0,
+                ar: 0.0,
+                od: 0.0,
+                max_combo: 0,
+            });
+            continue;
         }
 
         results.push(calculate(beatmap_path, &request).await);
