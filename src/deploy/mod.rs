@@ -270,6 +270,7 @@ async fn recalculate_mode_scores(
     .fetch_all(&ctx.database)
     .await?;
 
+    let scores = keep_cached(scores, |score| score.beatmap_id, &ctx).await;
     let players = scores.iter().map(|score| score.userid).collect();
 
     for score_chunk in scores.chunks(100).map(|c| c.to_vec()) {
@@ -278,11 +279,6 @@ async fn recalculate_mode_scores(
         for score in score_chunk {
             let beatmap_path =
                 Path::new(&ctx.config.beatmaps_path).join(format!("{}.osu", score.beatmap_id));
-
-            if let Err(e) = beatmaps::ensure_cached(&beatmap_path, score.beatmap_id).await {
-                log::warn!("Couldn't get .osu for beatmap {}: {e}", score.beatmap_id);
-                continue;
-            }
 
             let future = tokio::spawn(recalculate_score(
                 score,
@@ -373,16 +369,12 @@ async fn recalculate_mode_lazer_scores(
         Err(error) => return Err(error.into()),
     };
 
+    let scores = keep_cached(scores, |score| score.beatmap_id, &ctx).await;
     let players = scores.iter().map(|score| (score.user_id, score.variant)).collect();
 
     for score in scores {
         let beatmap_path =
             Path::new(&ctx.config.beatmaps_path).join(format!("{}.osu", score.beatmap_id));
-
-        if let Err(e) = beatmaps::ensure_cached(&beatmap_path, score.beatmap_id).await {
-            log::warn!("Couldn't get .osu for beatmap {}: {e}", score.beatmap_id);
-            continue;
-        }
 
         let lazer_mods: serde_json::Value = serde_json::from_str(&score.mods)?;
         let ranked_mods = lazer_mods_ranked(mode, &lazer_mods);
@@ -899,6 +891,30 @@ pub async fn serve_lazer(context: Context) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Fetches each map the scores are on once and groups the scores by map. A map that can't be had is logged once and
+/// its scores are left out.
+async fn keep_cached<T>(mut scores: Vec<T>, beatmap_id: impl Fn(&T) -> i32, ctx: &Context) -> Vec<T> {
+    scores.sort_by_key(|score| beatmap_id(score));
+
+    let mut missing = HashSet::new();
+    let mut last = None;
+    for id in scores.iter().map(&beatmap_id) {
+        if last == Some(id) {
+            continue;
+        }
+        last = Some(id);
+
+        let path = Path::new(&ctx.config.beatmaps_path).join(format!("{id}.osu"));
+        if let Err(e) = beatmaps::ensure_cached(&path, id).await {
+            log::warn!("Couldn't get .osu for beatmap {id}, skipping its scores: {e}");
+            missing.insert(id);
+        }
+    }
+
+    scores.retain(|score| !missing.contains(&beatmap_id(score)));
+    scores
 }
 
 struct RecalculateContext {
