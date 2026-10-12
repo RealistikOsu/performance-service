@@ -49,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
         "deploy" => deploy::serve(context).await?,
         "lazer_deploy" => deploy::serve_lazer(context).await?,
         "recalc" => deploy::recalc_single(context).await?,
+        "recalc_zero" => deploy::recalc_zero(context).await?,
         _ => panic!("unknown app component"),
     }
 

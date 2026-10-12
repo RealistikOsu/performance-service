@@ -38,6 +38,7 @@ The performance service features multiple componenets to cover most usecases. Th
 | `deploy` | A console interface for recalculating the whole server with the current PP system. Handles stats and score overwrite. |
 | `mass_recalc` | **Internal** undocumented rework testing tool. |
 | `recalc` | Recalculates a single user. |
+| `recalc_zero` | Recalculates every passed score left on 0pp on a ranked map (stable and lazer), then the players who had one. |
 
 #### Configuration
 There are other flags available for advanced users and configuration. **These may also be set through creating a copy of the `.env.example` file and naming it `.env`.**

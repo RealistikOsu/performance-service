@@ -7,7 +7,7 @@ use crate::{
 use akatsuki_pp_rs::{model::mode::GameMode, Beatmap};
 use redis::AsyncCommands;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::Hash,
     path::{Path, PathBuf},
     sync::Arc,
@@ -233,12 +233,14 @@ async fn recalculate_score(
     Ok(())
 }
 
+// Returns the players whose scores were recalculated.
 async fn recalculate_mode_scores(
     mode: i32,
     rx: i32,
+    only_zero: bool,
     ctx: Arc<Context>,
     recalc_ctx: Arc<Mutex<RecalculateContext>>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<HashSet<i32>> {
     let scores_table = match rx {
         0 => "scores",
         1 => "scores_relax",
@@ -258,13 +260,17 @@ async fn recalculate_mode_scores(
             WHERE
                 completed IN (2, 3)
                 AND play_mode = ?
+                {}
             ORDER BY pp DESC",
-            scores_table
+            scores_table,
+            if only_zero { "AND s.pp = 0 AND b.ranked IN (2, 3)" } else { "" }
         )
     )
     .bind(mode)
     .fetch_all(&ctx.database)
     .await?;
+
+    let players = scores.iter().map(|score| score.userid).collect();
 
     for score_chunk in scores.chunks(100).map(|c| c.to_vec()) {
         let mut futures = Vec::new();
@@ -290,12 +296,14 @@ async fn recalculate_mode_scores(
         futures::future::try_join_all(futures).await?;
     }
 
-    Ok(())
+    Ok(players)
 }
 
 #[derive(sqlx::FromRow)]
 struct LazerScoreRow {
     id: i64,
+    user_id: i32,
+    variant: i32,
     beatmap_id: i32,
     accuracy: f64,
     max_combo: i32,
@@ -338,14 +346,20 @@ fn lazer_mods_ranked(mode: i32, mods: &serde_json::Value) -> bool {
 
 /// Recalculates the pp of passed osu!lazer scores on ranked maps, whatever their mods, the way the lazer server calculates it on submission:
 /// from the stored mods and statistics, with lazer scoring. Without this, a pp change would leave them behind.
-async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::Result<()> {
-    let scores: Result<Vec<LazerScoreRow>, sqlx::Error> = sqlx::query_as(
-        "SELECT l.id, l.beatmap_id, l.accuracy, l.max_combo, CAST(l.mods AS CHAR) AS mods,
+/// Returns the players and variants whose scores were recalculated.
+async fn recalculate_mode_lazer_scores(
+    mode: i32,
+    only_zero: bool,
+    ctx: Arc<Context>,
+) -> anyhow::Result<HashSet<(i32, i32)>> {
+    let scores: Result<Vec<LazerScoreRow>, sqlx::Error> = sqlx::query_as(&format!(
+        "SELECT l.id, l.user_id, l.variant, l.beatmap_id, l.accuracy, l.max_combo, CAST(l.mods AS CHAR) AS mods,
             CAST(l.statistics AS CHAR) AS statistics, l.pp, l.ranked_mods
         FROM lazer_scores l
         INNER JOIN beatmaps b ON b.beatmap_md5 = l.beatmap_md5
-        WHERE l.ruleset_id = ? AND l.passed = 1 AND b.ranked IN (2, 3)",
-    )
+        WHERE l.ruleset_id = ? AND l.passed = 1 AND b.ranked IN (2, 3) {}",
+        if only_zero { "AND l.pp = 0" } else { "" }
+    ))
     .bind(mode)
     .fetch_all(&ctx.database)
     .await;
@@ -354,10 +368,12 @@ async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::
         Ok(scores) => scores,
         // The lazer tables haven't been migrated, so there's nothing to recalculate.
         Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("42S02") => {
-            return Ok(())
+            return Ok(HashSet::new())
         }
         Err(error) => return Err(error.into()),
     };
+
+    let players = scores.iter().map(|score| (score.user_id, score.variant)).collect();
 
     for score in scores {
         let beatmap_path =
@@ -405,7 +421,7 @@ async fn recalculate_mode_lazer_scores(mode: i32, ctx: Arc<Context>) -> anyhow::
         }
     }
 
-    Ok(())
+    Ok(players)
 }
 
 #[derive(sqlx::FromRow)]
@@ -878,7 +894,7 @@ pub async fn serve_lazer(context: Context) -> anyhow::Result<()> {
     let context = Arc::new(context);
 
     for mode in modes {
-        recalculate_mode_lazer_scores(mode, context.clone()).await?;
+        recalculate_mode_lazer_scores(mode, false, context.clone()).await?;
         recalculate_mode_lazer_users(mode, context.clone()).await?;
     }
 
@@ -935,13 +951,14 @@ pub async fn serve(context: Context) -> anyhow::Result<()> {
                 recalculate_mode_scores(
                     mode,
                     rx.clone(),
+                    false,
                     context_arc.clone(),
                     recalculate_context.clone(),
                 )
                 .await?;
             }
         } else {
-            recalculate_mode_scores(mode, 0, context_arc.clone(), recalculate_context.clone())
+            recalculate_mode_scores(mode, 0, false, context_arc.clone(), recalculate_context.clone())
                 .await?;
         }
     }
@@ -981,6 +998,32 @@ pub async fn recalc_single(context: Context) -> anyhow::Result<()> {
     for rx in 0..3 {
         for mode in 0..4 {
             recalculate_user(user_id, mode, rx, ctx.clone()).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Recalculates every passed score still on 0pp on a ranked or approved map, stable and lazer, then the totals and
+/// leaderboards of only the players who had one. For scores set while their map's .osu couldn't be read.
+pub async fn recalc_zero(context: Context) -> anyhow::Result<()> {
+    let ctx = Arc::new(context);
+    let recalc_ctx = Arc::new(Mutex::new(RecalculateContext {
+        beatmaps: HashMap::new(),
+    }));
+
+    for mode in 0..4 {
+        for rx in 0..3 {
+            let players =
+                recalculate_mode_scores(mode, rx, true, ctx.clone(), recalc_ctx.clone()).await?;
+            for user_id in players {
+                recalculate_user(user_id, mode, rx, ctx.clone()).await?;
+            }
+        }
+
+        let players = recalculate_mode_lazer_scores(mode, true, ctx.clone()).await?;
+        for (user_id, variant) in players {
+            recalculate_lazer_user(user_id, mode, variant, ctx.clone()).await?;
         }
     }
 
