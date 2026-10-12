@@ -129,16 +129,17 @@ async fn calculate_rosu_pp(
 
     drop(recalc_mutex);
 
-    let result = beatmap
-        .performance()
-        .try_mode(match request.mode {
-            0 => GameMode::Osu,
-            1 => GameMode::Taiko,
-            2 => GameMode::Catch,
-            3 => GameMode::Mania,
-            _ => unreachable!(),
-        })
-        .unwrap()
+    let Ok(builder) = beatmap.performance().try_mode(match request.mode {
+        0 => GameMode::Osu,
+        1 => GameMode::Taiko,
+        2 => GameMode::Catch,
+        3 => GameMode::Mania,
+        _ => unreachable!(),
+    }) else {
+        return CalculateResponse { stars: 0.0, pp: 0.0 };
+    };
+
+    let result = builder
         .lazer(false)
         .mods(request.mods as u32)
         .combo(request.max_combo as u32)

@@ -188,16 +188,24 @@ async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) ->
         }
     };
 
-    let mut builder = beatmap
-        .performance()
-        .try_mode(match request.mode {
-            0 => GameMode::Osu,
-            1 => GameMode::Taiko,
-            2 => GameMode::Catch,
-            3 => GameMode::Mania,
-            _ => unreachable!(),
-        })
-        .unwrap()
+    // A mode-specific map only converts from osu!, so asking a catch map for osu! pp has no answer.
+    let Ok(builder) = beatmap.performance().try_mode(match request.mode {
+        0 => GameMode::Osu,
+        1 => GameMode::Taiko,
+        2 => GameMode::Catch,
+        3 => GameMode::Mania,
+        _ => unreachable!(),
+    }) else {
+        return CalculateResponse {
+            stars: 0.0,
+            pp: 0.0,
+            ar: 0.0,
+            od: 0.0,
+            max_combo: 0,
+        };
+    };
+
+    let mut builder = builder
         .lazer(request.lazer)
         .combo(request.max_combo as u32)
         .accuracy(request.accuracy as f64)
