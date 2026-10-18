@@ -1,14 +1,9 @@
-FROM ubuntu:24.04 AS builder
+FROM rust:1.91.1-slim-bookworm AS builder
 
-RUN apt-get update && apt-get install -y \
- build-essential \
- curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
  pkg-config \
  libssl-dev \
  && rm -rf /var/lib/apt/lists/*
-
-RUN curl https://sh.rustup.rs | bash -s -- -y --profile minimal
-ENV PATH="/root/.cargo/bin:$PATH"
 
 WORKDIR /src
 
