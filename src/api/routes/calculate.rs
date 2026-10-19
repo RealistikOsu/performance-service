@@ -11,7 +11,8 @@ use rosu_mods::{
 };
 use serde::de::DeserializeSeed;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::Semaphore;
 
 pub fn router() -> Router {
     Router::new()
@@ -111,24 +112,8 @@ fn round(x: f32, decimals: u32) -> f32 {
     (x * y).round() / y
 }
 
-async fn calculate_relax_pp(
-    beatmap_path: PathBuf,
-    request: &CalculateRequest,
-) -> CalculateResponse {
-    let beatmap = match Beatmap::from_path(beatmap_path) {
-        Ok(beatmap) => beatmap,
-        Err(_) => {
-            return CalculateResponse {
-                stars: 0.0,
-                pp: 0.0,
-                ar: 0.0,
-                od: 0.0,
-                max_combo: 0,
-            }
-        }
-    };
-
-    let mut builder = akatsuki_pp_rs::osu_2019::OsuPP::from_map(&beatmap)
+fn calculate_relax_pp(beatmap: &Beatmap, request: &CalculateRequest) -> CalculateResponse {
+    let mut builder = akatsuki_pp_rs::osu_2019::OsuPP::from_map(beatmap)
         .mods(request.mods as u32)
         .combo(request.max_combo as u32)
         .misses(request.miss_count as u32)
@@ -173,20 +158,7 @@ async fn calculate_relax_pp(
     }
 }
 
-async fn calculate_rosu_pp(beatmap_path: PathBuf, request: &CalculateRequest) -> CalculateResponse {
-    let beatmap = match Beatmap::from_path(beatmap_path) {
-        Ok(beatmap) => beatmap,
-        Err(_) => {
-            return CalculateResponse {
-                stars: 0.0,
-                pp: 0.0,
-                ar: 0.0,
-                od: 0.0,
-                max_combo: 0,
-            }
-        }
-    };
-
+fn calculate_rosu_pp(beatmap: &Beatmap, request: &CalculateRequest) -> CalculateResponse {
     // A mode-specific map only converts from osu!, so asking a catch map for osu! pp has no answer.
     let Ok(builder) = beatmap.performance().try_mode(match request.mode {
         0 => GameMode::Osu,
@@ -292,29 +264,61 @@ async fn calculate_play(
 
         if let Err(e) = beatmaps::ensure_cached(&beatmap_path, request.beatmap_id).await {
             log::warn!("Couldn't get .osu for beatmap {}: {e}", request.beatmap_id);
-            results.push(CalculateResponse {
-                stars: 0.0,
-                pp: 0.0,
-                ar: 0.0,
-                od: 0.0,
-                max_combo: 0,
-            });
+            results.push(zero_response());
             continue;
         }
 
-        results.push(calculate(beatmap_path, &request).await);
+        results.push(calculate_blocking(beatmap_path, request).await);
     }
 
     Json(results)
 }
 
+fn zero_response() -> CalculateResponse {
+    CalculateResponse {
+        stars: 0.0,
+        pp: 0.0,
+        ar: 0.0,
+        od: 0.0,
+        max_combo: 0,
+    }
+}
+
+// Parsing and calculating are pure CPU, so they run on the blocking pool, at most one per core at a time. The runtime
+// workers stay free to accept and answer requests however many calculations are queued.
+async fn calculate_blocking(beatmap_path: PathBuf, request: CalculateRequest) -> CalculateResponse {
+    static PERMITS: OnceLock<Semaphore> = OnceLock::new();
+    let permits = PERMITS.get_or_init(|| {
+        Semaphore::new(std::thread::available_parallelism().map_or(1, |n| n.get()))
+    });
+    let _permit = permits.acquire().await.expect("semaphore is never closed");
+
+    match tokio::task::spawn_blocking(move || calculate_sync(&beatmap_path, &request)).await {
+        Ok(response) => response,
+        // A panic inside the calculation still takes the request down, as it did when it ran on the handler task.
+        Err(e) => std::panic::resume_unwind(e.into_panic()),
+    }
+}
+
 pub async fn calculate(beatmap_path: PathBuf, request: &CalculateRequest) -> CalculateResponse {
+    calculate_sync(&beatmap_path, request)
+}
+
+fn calculate_sync(beatmap_path: &Path, request: &CalculateRequest) -> CalculateResponse {
+    let beatmap = match beatmaps::parsed(beatmap_path, request.beatmap_id) {
+        Ok(beatmap) => beatmap,
+        Err(e) => {
+            log::warn!("Couldn't parse .osu for beatmap {}: {e}", request.beatmap_id);
+            return zero_response();
+        }
+    };
+
     // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence the `mode == 0` gating.
     let use_2019_pp = request.mode == 0 && request.mods & RX > 0;
 
     if use_2019_pp {
-        calculate_relax_pp(beatmap_path, request).await
+        calculate_relax_pp(&beatmap, request)
     } else {
-        calculate_rosu_pp(beatmap_path, request).await
+        calculate_rosu_pp(&beatmap, request)
     }
 }
