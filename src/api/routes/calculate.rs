@@ -313,8 +313,9 @@ fn calculate_sync(beatmap_path: &Path, request: &CalculateRequest) -> CalculateR
         }
     };
 
-    // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence the `mode == 0` gating.
-    let use_2019_pp = request.mode == 0 && request.mods & RX > 0;
+    // osu_2019::OsuPP (calculate_relax_pp) is std-only, hence the `mode == 0` gating. Lazer scores
+    // carry the RX bit too but get the modern calculation, like the rest of lazer.
+    let use_2019_pp = request.mode == 0 && request.mods & RX > 0 && !request.lazer;
 
     if use_2019_pp {
         calculate_relax_pp(&beatmap, request)
