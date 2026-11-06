@@ -36,8 +36,8 @@ dependencies = [
 
 [[package]]
 name = "akatsuki-pp"
-version = "1.4.2"
-source = "git+https://github.com/RealistikOsu/akatsuki-pp-rs?rev=e31cc2de00aafdc5f5c0bb7a0738b81b349c871e#e31cc2de00aafdc5f5c0bb7a0738b81b349c871e"
+version = "1.4.3"
+source = "git+https://github.com/RealistikOsu/akatsuki-pp-rs?rev=b046dc8141daff053282901d9440f8fcdfeb5644#b046dc8141daff053282901d9440f8fcdfeb5644"
 dependencies = [
  "divan",
  "rosu-map",
@@ -587,7 +587,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1430,7 +1430,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "performance-service"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "akatsuki-pp",
  "anyhow",
@@ -1831,7 +1831,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2266,7 +2266,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
