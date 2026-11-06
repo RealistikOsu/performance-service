@@ -7,6 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /src
 
+# Fewer parallel rustc processes keep the build's peak memory down on a shared host.
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+
 # Dependencies on their own layer, so a source change doesn't recompile them.
 COPY rust-toolchain Cargo.toml Cargo.lock build.rs ./
 COPY migrations ./migrations
