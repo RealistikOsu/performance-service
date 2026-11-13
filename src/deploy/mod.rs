@@ -160,6 +160,35 @@ async fn calculate_rosu_pp(
     CalculateResponse { stars, pp }
 }
 
+/// A score the patcher sent its own mod list with is calculated from that list, so settings like Mirror count. It stays
+/// on stable scoring (`lazer` off), and the relax 2019 path still applies to relax scores.
+async fn calculate_from_mods_json(
+    score: &RippleScore,
+    beatmap_path: PathBuf,
+) -> Option<CalculateResponse> {
+    let lazer_mods = serde_json::from_str(score.mods_json.as_deref()?).ok()?;
+
+    let request = LazerCalculateRequest {
+        beatmap_id: score.beatmap_id,
+        mode: score.play_mode,
+        mods: score.mods,
+        max_combo: score.max_combo,
+        accuracy: score.accuracy,
+        miss_count: score.count_misses,
+        passed_objects: None,
+        playback_rate: Some(score.playback_rate as f32),
+        lazer: false,
+        lazer_mods: Some(lazer_mods),
+    };
+
+    let response = calculate(beatmap_path, &request).await;
+
+    Some(CalculateResponse {
+        stars: response.stars,
+        pp: response.pp,
+    })
+}
+
 async fn recalculate_score(
     score: RippleScore,
     beatmap_path: PathBuf,
@@ -176,7 +205,9 @@ async fn recalculate_score(
         playback_rate: score.playback_rate as f32,
     };
 
-    let response = if score.mods & RX > 0 && score.play_mode == 0 {
+    let response = if let Some(response) = calculate_from_mods_json(&score, beatmap_path.clone()).await {
+        response
+    } else if score.mods & RX > 0 && score.play_mode == 0 {
         calculate_special_pp(beatmap_path, &request, &recalc_ctx).await
     } else {
         calculate_rosu_pp(beatmap_path, &request, &recalc_ctx).await
@@ -250,7 +281,7 @@ async fn recalculate_mode_scores(
 
     let scores: Vec<RippleScore> = sqlx::query_as(
         &format!(
-            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, (s.playback_rate + 0e0) AS playback_rate, s.300_count,
+            "SELECT s.id, s.beatmap_md5, s.userid, s.score, s.max_combo, s.full_combo, s.mods, (s.playback_rate + 0e0) AS playback_rate, CAST(s.mods_json AS CHAR) AS mods_json, s.300_count,
             s.100_count, s.50_count, s.katus_count, s.gekis_count, s.misses_count, s.time, s.play_mode, s.completed,
             s.accuracy, s.pp, b.beatmap_id, b.beatmapset_id
             FROM {} s

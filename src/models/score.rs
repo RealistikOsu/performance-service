@@ -154,6 +154,11 @@ pub struct RippleScore {
     pub mods: i32,
     pub playback_rate: f64,
 
+    // The patcher's own mod list as JSON text, for the queries that select it.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub mods_json: Option<String>,
+
     #[serde(rename = "300_count")]
     #[sqlx(rename = "300_count")]
     pub count_300: i32,
